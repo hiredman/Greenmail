@@ -33,6 +33,7 @@ public class Pop3Handler extends Thread {
     }
 
     public void run() {
+        Pop3Server.pop3_lock.lock();
         try {
             _conn = new Pop3Connection(this, _socket);
             _state = new Pop3State(_manager);
@@ -50,15 +51,15 @@ public class Pop3Handler extends Thread {
             _conn.println("421 Service shutting down and closing transmission channel");
 
         } catch (Exception e) {
-        	e.printStackTrace();
+            e.printStackTrace();
         } finally {
             try {
                 _socket.close();
             } catch (IOException ioe) {
-            	ioe.printStackTrace();
+                ioe.printStackTrace();
             }
+            Pop3Server.pop3_lock.unlock();
         }
-
     }
 
     void sendGreetings() {
@@ -66,7 +67,7 @@ public class Pop3Handler extends Thread {
     }
 
     void handleCommand()
-            throws IOException {
+        throws IOException {
         _currentLine = _conn.readLine();
 
         if (_currentLine == null) {
@@ -76,7 +77,7 @@ public class Pop3Handler extends Thread {
         }
 
         String commandName = new StringTokenizer(_currentLine, " ").nextToken()
-                .toUpperCase();
+            .toUpperCase();
 
         Pop3Command command = _registry.getCommand(commandName);
 
@@ -96,13 +97,13 @@ public class Pop3Handler extends Thread {
     }
 
     public void quit() {
-         _quitting = true;
+        _quitting = true;
         try {
             if (_socket != null && !_socket.isClosed()) {
                 _socket.close();
             }
         } catch(IOException ignored) {
             //empty
-        } 
+        }
     }
 }

@@ -16,6 +16,8 @@ import com.icegreen.greenmail.util.ServerSetup;
 
 public class Pop3Server extends AbstractServer {
 
+    public static java.util.concurrent.locks.Lock pop3_lock = new java.util.concurrent.locks.ReentrantLock();
+
     public Pop3Server(ServerSetup setup, Managers managers) {
         super(setup, managers);
     }
