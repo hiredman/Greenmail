@@ -59,7 +59,7 @@ public class SimpleStoredMessage
     public MailMessageAttributes getAttributes() throws FolderException {
         if (attributes == null) {
             attributes = new SimpleMessageAttributes();
-            attributes.setAttributesFor(mimeMessage, internalDate);
+            attributes.setAttributesFor(mimeMessage);
         }
         return attributes;
     }
