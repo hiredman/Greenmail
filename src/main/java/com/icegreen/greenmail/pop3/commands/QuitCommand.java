@@ -13,7 +13,7 @@ import com.icegreen.greenmail.store.FolderException;
 
 
 public class QuitCommand
-        extends Pop3Command {
+    extends Pop3Command {
     public boolean isValidForState(Pop3State state) {
 
         return true;
@@ -24,10 +24,11 @@ public class QuitCommand
         try {
             MailFolder folder = state.getFolder();
             if (folder != null) {
-                folder.expunge();
-
+                // this is totally balls, there must be a bug in expunge?
+                while (folder.getMessageCount() != folder.getNonDeletedMessages().size()) {
+                    folder.expunge();
+                }
             }
-
             conn.println("+OK bye see you soon");
             conn.quit();
         } catch (FolderException me) {
