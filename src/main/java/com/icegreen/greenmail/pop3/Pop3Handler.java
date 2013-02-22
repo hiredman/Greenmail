@@ -51,12 +51,12 @@ public class Pop3Handler extends Thread {
             _conn.println("421 Service shutting down and closing transmission channel");
 
         } catch (Exception e) {
-            e.printStackTrace();
+            //e.printStackTrace();
         } finally {
             try {
                 _socket.close();
             } catch (IOException ioe) {
-                ioe.printStackTrace();
+                //ioe.printStackTrace();
             }
             Pop3Server.pop3_lock.unlock();
         }
