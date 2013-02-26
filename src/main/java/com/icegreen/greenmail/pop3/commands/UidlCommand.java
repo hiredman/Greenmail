@@ -17,8 +17,7 @@ import com.icegreen.greenmail.store.SimpleStoredMessage;
 import com.icegreen.greenmail.store.FolderException;
 
 
-public class UidlCommand
-        extends Pop3Command {
+public class UidlCommand implements Pop3Command {
     public boolean isValidForState(Pop3State state) {
 
         return state.isAuthenticated();

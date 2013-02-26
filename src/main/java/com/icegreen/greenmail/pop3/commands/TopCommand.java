@@ -19,8 +19,7 @@ import com.icegreen.greenmail.store.MailFolder;
 import com.icegreen.greenmail.store.SimpleStoredMessage;
 
 
-public class TopCommand
-        extends Pop3Command {
+public class TopCommand implements Pop3Command {
     public boolean isValidForState(Pop3State state) {
 
         return state.isAuthenticated();

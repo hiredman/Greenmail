@@ -19,8 +19,7 @@ import com.icegreen.greenmail.store.SimpleStoredMessage;
 import javax.mail.Flags;
 
 
-public class RetrCommand
-        extends Pop3Command {
+public class RetrCommand implements Pop3Command {
     public boolean isValidForState(Pop3State state) {
 
         return state.isAuthenticated();

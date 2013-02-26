@@ -9,9 +9,7 @@ import com.icegreen.greenmail.pop3.Pop3Connection;
 import com.icegreen.greenmail.pop3.Pop3State;
 
 
-public abstract class Pop3Command {
-    public abstract boolean isValidForState(Pop3State state);
-
-    public abstract void execute(Pop3Connection conn, Pop3State state,
-                                 String cmd);
+public interface Pop3Command {
+    public boolean isValidForState(Pop3State state);
+    public void execute(Pop3Connection conn, Pop3State state, String cmd);
 }

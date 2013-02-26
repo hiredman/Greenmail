@@ -13,7 +13,7 @@ import com.icegreen.greenmail.pop3.Pop3State;
  * @version $Id: $
  * @since Jan 28, 2006
  */
-public class NoopCommand extends Pop3Command {
+public class NoopCommand implements Pop3Command {
     public boolean isValidForState(Pop3State state) {
         return true;
     }

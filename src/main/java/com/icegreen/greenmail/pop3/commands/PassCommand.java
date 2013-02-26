@@ -10,8 +10,7 @@ import com.icegreen.greenmail.pop3.Pop3State;
 import com.icegreen.greenmail.user.GreenMailUser;
 
 
-public class PassCommand
-        extends Pop3Command {
+public class PassCommand implements Pop3Command {
     public boolean isValidForState(Pop3State state) {
 
         return !state.isAuthenticated();

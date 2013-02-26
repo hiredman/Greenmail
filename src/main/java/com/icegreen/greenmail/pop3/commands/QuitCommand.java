@@ -12,8 +12,7 @@ import com.icegreen.greenmail.store.MailFolder;
 import com.icegreen.greenmail.store.FolderException;
 
 
-public class QuitCommand
-    extends Pop3Command {
+public class QuitCommand implements Pop3Command {
     public boolean isValidForState(Pop3State state) {
 
         return true;

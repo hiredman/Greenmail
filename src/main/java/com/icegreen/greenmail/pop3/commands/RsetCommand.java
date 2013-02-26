@@ -34,7 +34,7 @@ import com.icegreen.greenmail.store.SimpleStoredMessage;
  * @version $Id: $
  * @since Dec 21, 2006
  */
-public class RsetCommand extends Pop3Command {
+public class RsetCommand implements Pop3Command {
     public boolean isValidForState(Pop3State state) {
         return true;
     }
