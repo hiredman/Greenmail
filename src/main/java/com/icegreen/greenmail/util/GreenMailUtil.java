@@ -222,8 +222,9 @@ public class GreenMailUtil {
 
     public static void sendTextEmail(String to, String from, String subject, String msg, final ServerSetup setup) {
         try {
-        	MimeMessage mimeMessage = buildSimpleMessage(from, subject, msg, setup);
-        	Address[] tos = new InternetAddress[]{new InternetAddress(to)};
+            MimeMessage mimeMessage = buildSimpleMessage(from, subject, msg, setup);
+            Address[] tos = new InternetAddress[]{new InternetAddress(to)};
+            mimeMessage.addRecipient(javax.mail.Message.RecipientType.TO, new InternetAddress(to));
             Transport.send(mimeMessage, tos);
         } catch (Throwable e) {
             throw new RuntimeException(e);
