@@ -15,8 +15,36 @@ import java.net.Socket;
 import java.net.SocketTimeoutException;
 import java.util.StringTokenizer;
 
+import clojure.lang.RT;
+import clojure.lang.Var;
+import clojure.lang.Symbol;
+import clojure.lang.IFn;
+import clojure.lang.IDeref;
 
 public class Pop3Handler extends Thread {
+
+    public static Var REQUIRE = RT.var("clojure.core","require");
+    public static Var ASSOC = RT.var("clojure.core","assoc");
+    public static Var SWAP = RT.var("clojure.core","swap!");
+    public static Symbol GREENMAIL_POP3 = Symbol.intern("greenmail.pop3");
+    public static Var COMMANDS = RT.var("greenmail.pop3","commands");
+
+    static {
+        try {
+            REQUIRE.invoke(GREENMAIL_POP3);
+        } catch (Exception e) {
+            throw new RuntimeException(e);
+        }
+    }
+
+    public static void registerCommand(String name, Pop3Command command) {
+        ((IFn)SWAP.deref()).invoke(COMMANDS.deref(), ASSOC.deref(), name, command);
+    }
+
+    public static Pop3Command getCommand(String name) {
+        return (Pop3Command)RT.get(((IDeref)COMMANDS.deref()).deref(),name);
+    }
+
     Pop3CommandRegistry _registry;
     Pop3Connection _conn;
     UserManager _manager;
@@ -25,9 +53,7 @@ public class Pop3Handler extends Thread {
     String _currentLine;
     private Socket _socket;
 
-    public Pop3Handler(Pop3CommandRegistry registry,
-                       UserManager manager, Socket socket) {
-        _registry = registry;
+    public Pop3Handler(UserManager manager, Socket socket) {
         _manager = manager;
         _socket = socket;
     }
@@ -79,7 +105,7 @@ public class Pop3Handler extends Thread {
         String commandName = new StringTokenizer(_currentLine, " ").nextToken()
             .toUpperCase();
 
-        Pop3Command command = _registry.getCommand(commandName);
+        Pop3Command command = getCommand(commandName);
 
         if (command == null) {
             _conn.println("-ERR Command not recognized");

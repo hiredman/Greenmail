@@ -58,7 +58,7 @@ public class Pop3Server extends AbstractServer {
             while (keepOn()) {
                 try {
                     Socket clientSocket = serverSocket.accept();
-                    Pop3Handler pop3Handler = new Pop3Handler(new Pop3CommandRegistry(), managers.getUserManager(), clientSocket);
+                    Pop3Handler pop3Handler = new Pop3Handler(managers.getUserManager(), clientSocket);
                     handlers.add(pop3Handler);
                     pop3Handler.start();
                 } catch (IOException ignored) {
