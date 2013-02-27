@@ -24,6 +24,13 @@ import com.icegreen.greenmail.imap.ImapConstants;
 import com.icegreen.greenmail.imap.commands.search.Criteria;
 import com.icegreen.greenmail.mail.MovingMessage;
 
+import clojure.lang.RT;
+import clojure.lang.Var;
+import clojure.lang.Symbol;
+import clojure.lang.IFn;
+import clojure.lang.AFn;
+import clojure.lang.IDeref;
+
 /**
  * A simple in-memory implementation of {@link Store}, used for testing
  * and development. Note: this implementation does not persist *anything* to disk.
@@ -32,7 +39,12 @@ import com.icegreen.greenmail.mail.MovingMessage;
  * @version $Revision: 109034 $
  */
 public class InMemoryStore
-        implements Store, ImapConstants {
+    implements Store, ImapConstants {
+
+    public static Var REQUIRE = RT.var("clojure.core","require");
+    public static Symbol GREENMAIL_STORE = Symbol.intern("greenmail.store");
+    public static Var EXPUNGE = RT.var("greenmail.store","expunge");
+
     private RootFolder rootMailbox = new RootFolder();
     private static final Flags PERMANENT_FLAGS = new Flags();
 
@@ -42,6 +54,7 @@ public class InMemoryStore
         PERMANENT_FLAGS.add(Flags.Flag.DRAFT);
         PERMANENT_FLAGS.add(Flags.Flag.FLAGGED);
         PERMANENT_FLAGS.add(Flags.Flag.SEEN);
+        REQUIRE.invoke(GREENMAIL_STORE);
     }
 
     public MailFolder getMailbox(String absoluteMailboxName) {
@@ -49,7 +62,7 @@ public class InMemoryStore
 
         // The first token must be "#mail"
         if (!tokens.hasMoreTokens() ||
-                !tokens.nextToken().equalsIgnoreCase(USER_NAMESPACE)) {
+            !tokens.nextToken().equalsIgnoreCase(USER_NAMESPACE)) {
             return null;
         }
 
@@ -68,7 +81,7 @@ public class InMemoryStore
     public MailFolder createMailbox(MailFolder parent,
                                     String mailboxName,
                                     boolean selectable)
-            throws FolderException {
+        throws FolderException {
         if (mailboxName.indexOf(HIERARCHY_DELIMITER_CHAR) != -1) {
             throw new FolderException("Invalid mailbox name.");
         }
@@ -113,13 +126,13 @@ public class InMemoryStore
      * @see com.icegreen.greenmail.store.Store#listMailboxes
      */
     public Collection<MailFolder> listMailboxes(String searchPattern)
-            throws FolderException {
+        throws FolderException {
         int starIndex = searchPattern.indexOf('*');
         int percentIndex = searchPattern.indexOf('%');
 
         // We only handle wildcard at the end of the search pattern.
         if ((starIndex > -1 && starIndex < searchPattern.length() - 1) ||
-                (percentIndex > -1 && percentIndex < searchPattern.length() - 1)) {
+            (percentIndex > -1 && percentIndex < searchPattern.length() - 1)) {
             throw new FolderException("WIldcard characters are only handled as the last character of a list argument.");
         }
 
@@ -351,9 +364,9 @@ public class InMemoryStore
             long uid = nextUid;
             nextUid++;
 
-//            flags.setRecent(true);
+            //            flags.setRecent(true);
             SimpleStoredMessage storedMessage = new SimpleStoredMessage(message, flags,
-                    internalDate, uid);
+                                                                        internalDate, uid);
             storedMessage.getFlags().add(Flags.Flag.RECENT);
 
             mailMessages.add(storedMessage);
@@ -433,7 +446,7 @@ public class InMemoryStore
             appendMessage(message, flags, internalDate);
         }
 
-        
+
         public SimpleStoredMessage getMessage(long uid) {
             for (int i = 0; i < mailMessages.size(); i++) {
                 SimpleStoredMessage message = mailMessages.get(i);
@@ -477,7 +490,7 @@ public class InMemoryStore
         }
 
         public long copyMessage(long uid, MailFolder toFolder)
-                throws FolderException {
+            throws FolderException {
             SimpleStoredMessage originalMessage = getMessage(uid);
             MimeMessage newMime = null;
             try {
@@ -500,6 +513,17 @@ public class InMemoryStore
                     expungeMessage(i + 1);
                 }
             }
+            ((IFn)EXPUNGE.deref()).invoke(this, new AFn(){
+                    public Object invoke (Object arg) {
+                        for (int i = 0; i < mailMessages.size(); i++) {
+                            SimpleStoredMessage message = mailMessages.get(i);
+                            if (arg.equals(message.getUid())) {
+                                expungeMessage(i + 1);
+                            }
+                        }
+                        return null;
+                    }
+                });
         }
 
         private void expungeMessage(int msn) {
