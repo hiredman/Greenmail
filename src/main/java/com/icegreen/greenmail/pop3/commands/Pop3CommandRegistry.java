@@ -5,21 +5,24 @@
  */
 package com.icegreen.greenmail.pop3.commands;
 
-import java.util.HashMap;
+import java.util.concurrent.ConcurrentHashMap;
 import java.util.Map;
 
 
 public class Pop3CommandRegistry {
-    private static Map<String, Pop3Command> commands = new HashMap<String, Pop3Command>();
+    public static Map<String, Pop3Command> commands = new ConcurrentHashMap<String, Pop3Command>();
     private static Object[][] COMMANDS = new Object[][]
     {
-        {"QUIT", QuitCommand.class}, {"STAT", StatCommand.class},
-        {"APOP", ApopCommand.class}, {"USER", UserCommand.class},
-        {"PASS", PassCommand.class}, {"LIST", ListCommand.class},
-        {"UIDL", UidlCommand.class}, {"TOP", TopCommand.class},
-        {"RETR", RetrCommand.class}, {"DELE", DeleCommand.class}
-        , {"NOOP", NoopCommand.class}, {"RSET", RsetCommand.class}
-
+        {"APOP", ApopCommand.class},
+        {"USER", UserCommand.class},
+        {"PASS", PassCommand.class},
+        {"LIST", ListCommand.class},
+        {"UIDL", UidlCommand.class},
+        {"TOP", TopCommand.class},
+        {"RETR", RetrCommand.class},
+        {"DELE", DeleCommand.class},
+        {"NOOP", NoopCommand.class},
+        {"RSET", RsetCommand.class}
     };
 
     public void load()
@@ -39,9 +42,14 @@ public class Pop3CommandRegistry {
                 throw e;
             }
         }
+        try {
+        clojure.lang.RT.var("clojure.core", "require").invoke(clojure.lang.Symbol.intern("greenmail.pop3"));
+        } catch (Throwable t) {
+            t.printStackTrace();
+        }
     }
 
-    private void registerCommand(String name, Pop3Command command) {
+    public static void registerCommand(String name, Pop3Command command) {
         commands.put(name, command);
     }
 
