@@ -2,9 +2,10 @@
   (:import (com.icegreen.greenmail.pop3.commands Pop3Command
                                                  Pop3CommandRegistry)
            (com.icegreen.greenmail.store FolderException)
-           (com.icegreen.greenmail.foedus.util MsgRangeFilter
-                                               GreenMailUtil)
-           (javax.mail Flags)
+           (com.icegreen.greenmail.util GreenMailUtil)
+           (com.icegreen.greenmail.foedus.util MsgRangeFilter)
+           (javax.mail Flags
+                       Flags$Flag)
            (java.io StringReader)))
 
 (def commands (atom {}))
@@ -50,7 +51,7 @@
           (if (.contains flags Flags$Flag/DELETED)
             (.println conn "-ERR message already deleted")
             (do
-              (.add fags Flags$Flag/DELETED)
+              (.add flags Flags$Flag/DELETED)
               (.println conn "+OK message scheduled for deletion"))))))
     (catch Exception e
       (.println conn (str "-ERR " e)))))
@@ -88,8 +89,8 @@
               messages (.getMessages inbox (MsgRangeFilter. msg-number false))]
           (if (not= 1 (count messages))
             (.println conn "-ERR no such message")
-            (.println conn (str "+OK " msg-number " " (.getUid (first message))))))
-        (let [message (.getNonDeletedMessages inbox)]
+            (.println conn (str "+OK " msg-number " " (.getUid (first messages))))))
+        (let [messages (.getNonDeletedMessages inbox)]
           (.println conn "+OK")
           (doseq [message messages]
             (.println conn (str (.getMsn inbox (.getUid message)) " "
@@ -146,4 +147,4 @@
          "LIST" com.icegreen.greenmail.pop3.commands.ListCommand
          "TOP" com.icegreen.greenmail.pop3.commands.TopCommand
          "RSET" com.icegreen.greenmail.pop3.commands.RsetCommand}]
-  (swap! commands assoc commnd (.newInstance klass)))
+  (swap! commands assoc command (.newInstance klass)))
