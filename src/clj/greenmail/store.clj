@@ -16,10 +16,6 @@
 
 (def mail (ref {}))
 
-(defmulti folder-from class)
-
-(defmulti id-of class)
-
 (defprotocol HasChildren
   (get-children [_])
   (get-child [_ child-id])
@@ -35,24 +31,6 @@
 (defprotocol SelectEnabling
   (set-selectable [_ v]))
 
-(extend-type com.icegreen.greenmail.store.InMemoryStore$HierarchicalFolder
-  HasChildren
-  (get-children [f]
-    (.getChildren f))
-  (get-child [f child-id]
-    (.getChild f child-id))
-  (add-child [f child]
-    (.add (get-children f) child))
-  HasParent
-  (get-parent [f]
-    (.getParent f))
-  Nameable
-  (set-name [f n]
-    (.setName f n))
-  SelectEnabling
-  (set-selectable [f v]
-    (.setSelectable f v)))
-
 (def hierarchy-delimiter-char ".")
 
 (def permament-flags
@@ -66,12 +44,19 @@
 (declare ->HiMF)
 
 (defn get-full-name [id]
-  ;; TODO: get rid of calls to folder-from here
-  (if (:root? (get @mail id))
-    (.getName (folder-from id))
-    (str (.getFullName (get-parent (folder-from id)))
-         hierarchy-delimiter-char
-         (.getName (folder-from id)))))
+  ;; TODO: get rid of calls to ->HiMF here
+  (when (not (instance? UUID id))
+    (.printStackTrace (Exception. "dumb")))
+  (try
+    (if (:root? (get @mail id))
+      (.getName (->HiMF id))
+      (str (.getFullName (:id (get-parent (->HiMF id))))
+           hierarchy-delimiter-char
+           (.getName (->HiMF id))))
+    (catch Exception e
+      (prn id)
+      (prn (get @mail id))
+      (throw e))))
 
 (defn get-message-count [id]
   (count (:messages (get @mail id))))
@@ -224,21 +209,21 @@
        message)))
   HasChildren
   (get-children [_]
-    (map folder-from (:children (get @mail id))))
+    (map ->HiMF (:children (get @mail id))))
   (get-child [folder child-name]
     (first (for [child (get-children folder)
                  :when (.equalsIgnoreCase (.getName child) child-name)]
              child)))
   (add-child [_ child]
     (dosync
-     (alter mail update-in [id :children] conj (id-of child))))
+     (alter mail update-in [id :children] conj (:id child))))
   (remove-child [_ child]
     (dosync
-     (alter mail update-in [id :children] disj (id-of child))))
+     (alter mail update-in [id :children] disj (:id child))))
   HasParent
   (get-parent [_]
     (when-let [parent-id (:parent (get @mail id))]
-      (folder-from parent-id)))
+      (->HiMF parent-id)))
   Nameable
   (set-name [_ new-name]
     (dosync
@@ -247,11 +232,6 @@
   (set-selectable [_ v]
     (dosync
      (alter mail update-in [id] assoc :selectable? (boolean v)))))
-
-(defmethod id-of :default [x] x)
-(defmethod id-of HiMF [x] (:id x))
-(defmethod folder-from :default [x] x)
-(defmethod folder-from UUID [x] (->HiMF x))
 
 (defn mail-folder [parent name & [root?]]
   (let [id (UUID/randomUUID)]

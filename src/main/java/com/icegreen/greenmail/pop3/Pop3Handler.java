@@ -7,7 +7,6 @@ package com.icegreen.greenmail.pop3;
 
 
 import com.icegreen.greenmail.pop3.commands.Pop3Command;
-import com.icegreen.greenmail.pop3.commands.Pop3CommandRegistry;
 import com.icegreen.greenmail.user.UserManager;
 
 import java.io.IOException;
@@ -45,7 +44,6 @@ public class Pop3Handler extends Thread {
         return (Pop3Command)RT.get(((IDeref)COMMANDS.deref()).deref(),name);
     }
 
-    Pop3CommandRegistry _registry;
     Pop3Connection _conn;
     UserManager _manager;
     Pop3State _state;

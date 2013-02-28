@@ -1,6 +1,5 @@
 (ns greenmail.pop3
-  (:import (com.icegreen.greenmail.pop3.commands Pop3Command
-                                                 Pop3CommandRegistry)
+  (:import (com.icegreen.greenmail.pop3.commands Pop3Command)
            (com.icegreen.greenmail.store FolderException)
            (com.icegreen.greenmail.util GreenMailUtil)
            (com.icegreen.greenmail.foedus.util MsgRangeFilter)

@@ -11,7 +11,6 @@ import java.util.Iterator;
 
 import com.icegreen.greenmail.AbstractServer;
 import com.icegreen.greenmail.Managers;
-import com.icegreen.greenmail.pop3.commands.Pop3CommandRegistry;
 import com.icegreen.greenmail.util.ServerSetup;
 
 public class Pop3Server extends AbstractServer {
