@@ -51,8 +51,9 @@ public class InMemoryStore
     public static Var GET_PARENT = RT.var("greenmail.store","get-parent");
     public static Var SET_NAME = RT.var("greenmail.store","set-name");
     public static Var SET_SELECTABLE = RT.var("greenmail.store","set-selectable");
+    public static Var MAIL_FOLDER = RT.var("greenmail.store","mail-folder");
     
-    private RootFolder rootMailbox = new RootFolder();
+    private MailFolder rootMailbox = createRootFolder();
     private static final Flags PERMANENT_FLAGS = new Flags();
 
     static {
@@ -73,7 +74,7 @@ public class InMemoryStore
             return null;
         }
 
-        HierarchicalFolder parent = rootMailbox;
+        MailFolder parent = rootMailbox;
         while (parent != null && tokens.hasMoreTokens()) {
             String childName = tokens.nextToken();
             parent = getChild(parent, childName);
@@ -92,15 +93,14 @@ public class InMemoryStore
         if (mailboxName.indexOf(HIERARCHY_DELIMITER_CHAR) != -1) {
             throw new FolderException("Invalid mailbox name.");
         }
-        HierarchicalFolder castParent = (HierarchicalFolder) parent;
-        HierarchicalFolder child = new HierarchicalFolder(castParent, mailboxName);
+        MailFolder child = createHFolder(parent, mailboxName);
         addChild(parent, child);
         setSelectable(child,selectable);
         return child;
     }
 
     public void deleteMailbox(MailFolder folder) throws FolderException {
-        HierarchicalFolder toDelete = (HierarchicalFolder) folder;
+        MailFolder toDelete = folder;
 
         if (!getChildren_(toDelete).isEmpty()) {
             throw new FolderException("Cannot delete mailbox with children.");
@@ -110,17 +110,17 @@ public class InMemoryStore
             throw new FolderException("Cannot delete non-empty mailbox");
         }
 
-        HierarchicalFolder parent = getParent(toDelete);
+        MailFolder parent = getParent(toDelete);
         removeChild(parent, toDelete);
     }
 
     public void renameMailbox(MailFolder existingFolder, String newName) throws FolderException {
-        HierarchicalFolder toRename = (HierarchicalFolder) existingFolder;
+        MailFolder toRename = existingFolder;
         setName(toRename, newName);
     }
 
-    public Collection<HierarchicalFolder> getChildren(MailFolder parent) {
-        Collection<HierarchicalFolder> children = getChildren_(parent);
+    public Collection<MailFolder> getChildren(MailFolder parent) {
+        Collection<MailFolder> children = getChildren_(parent);
         return Collections.unmodifiableCollection(children);
     }
 
@@ -154,13 +154,13 @@ public class InMemoryStore
             }
             String matchPattern = searchPattern.substring(lastDot + 1, searchPattern.length() - 1);
 
-            HierarchicalFolder parent = (HierarchicalFolder) getMailbox(parentName);
+            MailFolder parent = (MailFolder) getMailbox(parentName);
             // If the parent from the search pattern doesn't exist,
             // return empty.
             if (parent != null) {
-                Iterator<HierarchicalFolder> children = new ArrayList<HierarchicalFolder>(getChildren_(parent)).iterator();
+                Iterator<MailFolder> children = new ArrayList<MailFolder>(getChildren_(parent)).iterator();
                 while (children.hasNext()) {
-                    HierarchicalFolder child = children.next();
+                    MailFolder child = children.next();
                     if (child.getName().startsWith(matchPattern)) {
                         mailboxes.add(child);
 
@@ -181,17 +181,22 @@ public class InMemoryStore
         return mailboxes;
     }
 
-    private void addAllChildren(HierarchicalFolder mailbox, Collection<MailFolder> mailboxes) {
-        Collection<HierarchicalFolder> children = getChildren_(mailbox);
-        Iterator<HierarchicalFolder> iterator = new ArrayList<HierarchicalFolder>(children).iterator();
+    private void addAllChildren(MailFolder mailbox, Collection<MailFolder> mailboxes) {
+        Collection<MailFolder> children = getChildren_(mailbox);
+        Iterator<MailFolder> iterator = new ArrayList<MailFolder>(children).iterator();
         while (iterator.hasNext()) {
-            HierarchicalFolder child = iterator.next();
+            MailFolder child = iterator.next();
             mailboxes.add(child);
             addAllChildren(child, mailboxes);
         }
     }
 
-    private class RootFolder extends HierarchicalFolder {
+    public static MailFolder createRootFolder() {
+        //return new RootFolder();
+        return (MailFolder)MAIL_FOLDER.invoke(null,ImapConstants.USER_NAMESPACE, true);
+    }
+
+    private static class RootFolder extends HierarchicalFolder {
         public RootFolder() {
             super(null, ImapConstants.USER_NAMESPACE);
         }
@@ -201,12 +206,12 @@ public class InMemoryStore
         }
     }
 
-    public static Collection<HierarchicalFolder> getChildren_(Object folder) {
-        return (Collection<HierarchicalFolder>)(((IFn)GET_CHILDREN.deref()).invoke(folder));
+    public static Collection<MailFolder> getChildren_(Object folder) {
+        return (Collection<MailFolder>)(((IFn)GET_CHILDREN.deref()).invoke(folder));
     }
 
-    public static HierarchicalFolder getChild(Object folder, String name) {
-        return (HierarchicalFolder)(((IFn)GET_CHILD.deref()).invoke(folder,name));
+    public static MailFolder getChild(Object folder, String name) {
+        return (MailFolder)(((IFn)GET_CHILD.deref()).invoke(folder,name));
     }
 
     public static void addChild(Object folder, Object child) {
@@ -217,17 +222,21 @@ public class InMemoryStore
         ((IFn)REMOVE_CHILD.deref()).invoke(folder,child);
     }
 
-    public static HierarchicalFolder getParent(Object folder) {
-        return (HierarchicalFolder)(((IFn)GET_PARENT.deref()).invoke(folder));
+    public static MailFolder getParent(Object folder) {
+        return (MailFolder)(((IFn)GET_PARENT.deref()).invoke(folder));
     }
 
     public static void setName(Object folder, String name) {
         ((IFn)SET_NAME.deref()).invoke(folder,name);
     }
 
-    public class HierarchicalFolder implements MailFolder {
-        private Collection<HierarchicalFolder> children;
-        private HierarchicalFolder parent;
+    public static MailFolder createHFolder(MailFolder parent, String name) {
+        return new HierarchicalFolder(parent,name);
+    }
+
+    public static class HierarchicalFolder implements MailFolder {
+        private Collection<MailFolder> children;
+        private MailFolder parent;
 
         protected String name;
         private boolean isSelectable = false;
@@ -238,26 +247,26 @@ public class InMemoryStore
 
         private List<FolderListener> _mailboxListeners = Collections.synchronizedList(new LinkedList<FolderListener>());
 
-        public HierarchicalFolder(HierarchicalFolder parent,
+        public HierarchicalFolder(MailFolder parent,
                                   String name) {
             this.name = name;
-            this.children = new ArrayList<HierarchicalFolder>();
+            this.children = new ArrayList<MailFolder>();
             this.parent = parent;
             this.uidValidity = System.currentTimeMillis();
         }
 
-        public Collection<HierarchicalFolder> getChildren() {
+        public Collection<MailFolder> getChildren() {
             return children;
         }
 
-        public HierarchicalFolder getParent() {
+        public MailFolder getParent() {
             return parent;
         }
 
-        public HierarchicalFolder getChild(String name) {
-            Iterator<HierarchicalFolder> iterator = children.iterator();
+        public MailFolder getChild(String name) {
+            Iterator<MailFolder> iterator = children.iterator();
             while (iterator.hasNext()) {
-                HierarchicalFolder child = iterator.next();
+                MailFolder child = iterator.next();
                 if (child.getName().equalsIgnoreCase(name)) {
                     return child;
                 }
