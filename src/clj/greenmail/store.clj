@@ -2,7 +2,8 @@
   (:import (javax.mail Flags$Flag
                        Flags)
            (com.icegreen.greenmail.store MailFolder
-                                         SimpleStoredMessage)
+                                         SimpleStoredMessage
+                                         MessageFlags)
            (java.util UUID)))
 
 (defn expunge [folder expunge-fun]
@@ -117,7 +118,8 @@
        (alter mail update-in [id :messages] conj smsg)
        (let [i (count (:messages (get @mail id)))]
          (doseq [listener (:listeners (get @mail id))]
-           (send-off a (fn [_] (.added listener i)))))))))
+           (send-off a (fn [_] (.added listener i)))))
+       uid))))
 
 (defn set-flags [id flags value? uid silent-listener add-uid?]
   (let [msn (get-msn id uid)
@@ -158,26 +160,50 @@
     (boolean (:selectable? (get @mail id))))
   (getUidNext [_]
     (:next-uid (get @mail id)))
-  (appendMessage [_ message flags internal-date]
-    (append-message id message flags internal-date))
-  (deleteAllMessages [_])
-  (expunge [_])
+  (appendMessage [folder message flags internal-date]
+    (long (append-message id message flags internal-date)))
+  (deleteAllMessages [_]
+    (dosync
+     (alter mail update-in [id :messages] empty)))
+  (expunge [f])
   (addListener [_ listener]
     (dosync
      (alter mail update-in [id :listeners] conj listener)))
   (removeListener [_ listener]
     (dosync
      (alter mail update-in [id :listeners] remove  (partial = listener))))
-  (^void store [_ ^com.icegreen.greenmail.mail.MovingMessage mail])
-  (^void store [_ ^javax.mail.internet.MimeMessage mail])
-  (^void store [_ ^javax.mail.internet.MimeMessage mail
-                ^java.util.Date internal-date])
-  (getMessageUids [_])
-  (search [_ search-term])
+  (^void store [folder ^com.icegreen.greenmail.mail.MovingMessage mail]
+    (.store folder (.getMessage mail)))
+  (^void store [folder ^javax.mail.internet.MimeMessage mail]
+    (.store folder mail (java.util.Date.)))
+  (^void store [folder ^javax.mail.internet.MimeMessage mail ^java.util.Date internal-date]
+    (.appendMessage folder mail (Flags.) internal-date))
+  (getMessageUids [_]
+    (into-array Long/TYPE (map #(.getUid %) (:messages (get @mail id)))))
+  (getMessage [_ uid]
+    (first (for [message (:messages (get @mail id))
+                 :when (= uid (.getUid message))]
+             message)))
+  (search [_ search-term]
+    (into-array Long/TYPE
+                (for [message (:messages (get @mail id))
+                      :when (.match search-term message)]
+                  (.getUid message))))
   (copyMessage [_ uid to-folder])
   (setFlags [_ flags value? uid listener add-uid?]
     (set-flags id flags value? uid listener add-uid?))
-  (replaceFlags [_ flags uid listener add-uid?])
+  (replaceFlags [_ flags uid silent-listener add-uid?]
+    (let [msn (get-msn id uid)
+          message (nth (:messages (get @mail id)) (dec msn))]
+      (.remove (.getFlags message) MessageFlags/ALL_FLAGS)
+      (.add (.getFlags message) flags)
+      (let [a (agent nil)
+            flags (.getFlags message)]
+        (dosync
+         (ensure mail)
+         (doseq [listener (:listeners (get @mail id))
+                 :when (not= listener silent-listener)]
+           (send-off a (fn [_] (.flagsUpdated msn flags (when add-uid? uid)))))))))
   (getMsn [_ uid]
     (get-msn id uid))
   (signalDeletion [_]

@@ -192,18 +192,7 @@ public class InMemoryStore
     }
 
     public static MailFolder createRootFolder() {
-        //return new RootFolder();
         return (MailFolder)MAIL_FOLDER.invoke(null,ImapConstants.USER_NAMESPACE, true);
-    }
-
-    private static class RootFolder extends HierarchicalFolder {
-        public RootFolder() {
-            super(null, ImapConstants.USER_NAMESPACE);
-        }
-
-        public String getFullName() {
-            return name;
-        }
     }
 
     public static Collection<MailFolder> getChildren_(Object folder) {
@@ -231,363 +220,364 @@ public class InMemoryStore
     }
 
     public static MailFolder createHFolder(MailFolder parent, String name) {
-        return new HierarchicalFolder(parent,name);
+        // return new HierarchicalFolder(parent,name);
+        return (MailFolder)MAIL_FOLDER.invoke(parent, name);
     }
 
-    public static class HierarchicalFolder implements MailFolder {
-        private Collection<MailFolder> children;
-        private MailFolder parent;
+    // public static class HierarchicalFolder implements MailFolder {
+    //     private Collection<MailFolder> children;
+    //     private MailFolder parent;
 
-        protected String name;
-        private boolean isSelectable = false;
+    //     protected String name;
+    //     private boolean isSelectable = false;
 
-        private List<SimpleStoredMessage> mailMessages = Collections.synchronizedList(new LinkedList<SimpleStoredMessage>());
-        private long nextUid = 1;
-        private long uidValidity;
+    //     private List<SimpleStoredMessage> mailMessages = Collections.synchronizedList(new LinkedList<SimpleStoredMessage>());
+    //     private long nextUid = 1;
+    //     private long uidValidity;
 
-        private List<FolderListener> _mailboxListeners = Collections.synchronizedList(new LinkedList<FolderListener>());
+    //     private List<FolderListener> _mailboxListeners = Collections.synchronizedList(new LinkedList<FolderListener>());
 
-        public HierarchicalFolder(MailFolder parent,
-                                  String name) {
-            this.name = name;
-            this.children = new ArrayList<MailFolder>();
-            this.parent = parent;
-            this.uidValidity = System.currentTimeMillis();
-        }
+    //     public HierarchicalFolder(MailFolder parent,
+    //                               String name) {
+    //         this.name = name;
+    //         this.children = new ArrayList<MailFolder>();
+    //         this.parent = parent;
+    //         this.uidValidity = System.currentTimeMillis();
+    //     }
 
-        public Collection<MailFolder> getChildren() {
-            return children;
-        }
+    //     public Collection<MailFolder> getChildren() {
+    //         return children;
+    //     }
 
-        public MailFolder getParent() {
-            return parent;
-        }
+    //     public MailFolder getParent() {
+    //         return parent;
+    //     }
 
-        public MailFolder getChild(String name) {
-            Iterator<MailFolder> iterator = children.iterator();
-            while (iterator.hasNext()) {
-                MailFolder child = iterator.next();
-                if (child.getName().equalsIgnoreCase(name)) {
-                    return child;
-                }
-            }
-            return null;
-        }
+    //     public MailFolder getChild(String name) {
+    //         Iterator<MailFolder> iterator = children.iterator();
+    //         while (iterator.hasNext()) {
+    //             MailFolder child = iterator.next();
+    //             if (child.getName().equalsIgnoreCase(name)) {
+    //                 return child;
+    //             }
+    //         }
+    //         return null;
+    //     }
 
-        public void setName(String name) {
-            this.name = name;
-        }
+    //     public void setName(String name) {
+    //         this.name = name;
+    //     }
 
-        public String getName() {
-            return name;
-        }
+    //     public String getName() {
+    //         return name;
+    //     }
 
-        public String getFullName() {
-            return parent.getFullName() + HIERARCHY_DELIMITER_CHAR + name;
-        }
+    //     public String getFullName() {
+    //         return parent.getFullName() + HIERARCHY_DELIMITER_CHAR + name;
+    //     }
 
-        public Flags getPermanentFlags() {
-            return PERMANENT_FLAGS;
-        }
+    //     public Flags getPermanentFlags() {
+    //         return PERMANENT_FLAGS;
+    //     }
 
-        public int getMessageCount() {
-            return mailMessages.size();
-        }
+    //     public int getMessageCount() {
+    //         return mailMessages.size();
+    //     }
 
-        public long getUidValidity() {
-            return uidValidity;
-        }
+    //     public long getUidValidity() {
+    //         return uidValidity;
+    //     }
 
-        public long getUidNext() {
-            return nextUid;
-        }
+    //     public long getUidNext() {
+    //         return nextUid;
+    //     }
 
-        public int getUnseenCount() {
-            int count = 0;
-            for (int i = 0; i < mailMessages.size(); i++) {
-                SimpleStoredMessage message = mailMessages.get(i);
-                if (!message.getFlags().contains(Flags.Flag.SEEN)) {
-                    count++;
-                }
-            }
-            return count;
-        }
+    //     public int getUnseenCount() {
+    //         int count = 0;
+    //         for (int i = 0; i < mailMessages.size(); i++) {
+    //             SimpleStoredMessage message = mailMessages.get(i);
+    //             if (!message.getFlags().contains(Flags.Flag.SEEN)) {
+    //                 count++;
+    //             }
+    //         }
+    //         return count;
+    //     }
 
-        /**
-         * Returns the 1-based index of the first unseen message. Unless there are outstanding
-         * expunge responses in the ImapSessionMailbox, this will correspond to the MSN for
-         * the first unseen.
-         */
-        public int getFirstUnseen() {
-            for (int i = 0; i < mailMessages.size(); i++) {
-                SimpleStoredMessage message = mailMessages.get(i);
-                if (!message.getFlags().contains(Flags.Flag.SEEN)) {
-                    return i + 1;
-                }
-            }
-            return -1;
-        }
+    //     /**
+    //      * Returns the 1-based index of the first unseen message. Unless there are outstanding
+    //      * expunge responses in the ImapSessionMailbox, this will correspond to the MSN for
+    //      * the first unseen.
+    //      */
+    //     public int getFirstUnseen() {
+    //         for (int i = 0; i < mailMessages.size(); i++) {
+    //             SimpleStoredMessage message = mailMessages.get(i);
+    //             if (!message.getFlags().contains(Flags.Flag.SEEN)) {
+    //                 return i + 1;
+    //             }
+    //         }
+    //         return -1;
+    //     }
 
-        public int getRecentCount(boolean reset) {
-            int count = 0;
-            for (int i = 0; i < mailMessages.size(); i++) {
-                SimpleStoredMessage message = mailMessages.get(i);
-                if (message.getFlags().contains(Flags.Flag.RECENT)) {
-                    count++;
-                    if (reset) {
-                        message.getFlags().remove(Flags.Flag.RECENT);
-                    }
-                }
-            }
-            return count;
-        }
+    //     public int getRecentCount(boolean reset) {
+    //         int count = 0;
+    //         for (int i = 0; i < mailMessages.size(); i++) {
+    //             SimpleStoredMessage message = mailMessages.get(i);
+    //             if (message.getFlags().contains(Flags.Flag.RECENT)) {
+    //                 count++;
+    //                 if (reset) {
+    //                     message.getFlags().remove(Flags.Flag.RECENT);
+    //                 }
+    //             }
+    //         }
+    //         return count;
+    //     }
 
-        public int getMsn(long uid) throws FolderException {
-            for (int i = 0; i < mailMessages.size(); i++) {
-                SimpleStoredMessage message = mailMessages.get(i);
-                if (message.getUid() == uid) {
-                    return i + 1;
-                }
-            }
-            throw new FolderException("No such message.");
-        }
+    //     public int getMsn(long uid) throws FolderException {
+    //         for (int i = 0; i < mailMessages.size(); i++) {
+    //             SimpleStoredMessage message = mailMessages.get(i);
+    //             if (message.getUid() == uid) {
+    //                 return i + 1;
+    //             }
+    //         }
+    //         throw new FolderException("No such message.");
+    //     }
 
-        public void signalDeletion() {
-            // Notify all the listeners of the new message
-            synchronized (_mailboxListeners) {
-                for (int j = 0; j < _mailboxListeners.size(); j++) {
-                    FolderListener listener = _mailboxListeners.get(j);
-                    listener.mailboxDeleted();
-                }
-            }
+    //     public void signalDeletion() {
+    //         // Notify all the listeners of the new message
+    //         synchronized (_mailboxListeners) {
+    //             for (int j = 0; j < _mailboxListeners.size(); j++) {
+    //                 FolderListener listener = _mailboxListeners.get(j);
+    //                 listener.mailboxDeleted();
+    //             }
+    //         }
 
-        }
+    //     }
 
-        public List<SimpleStoredMessage> getMessages(MsgRangeFilter range) {
-            List<SimpleStoredMessage> ret = new ArrayList<SimpleStoredMessage>();
-            for (int i = 0; i < mailMessages.size(); i++) {
-                if (range.includes(i+1)) {
-                    ret.add(mailMessages.get(i));
-                }
-            }
+    //     public List<SimpleStoredMessage> getMessages(MsgRangeFilter range) {
+    //         List<SimpleStoredMessage> ret = new ArrayList<SimpleStoredMessage>();
+    //         for (int i = 0; i < mailMessages.size(); i++) {
+    //             if (range.includes(i+1)) {
+    //                 ret.add(mailMessages.get(i));
+    //             }
+    //         }
 
-            return ret;
-        }
+    //         return ret;
+    //     }
 
-        @Override
-        public List<SimpleStoredMessage> getMessages() {
-            return mailMessages;
-        }
+    //     @Override
+    //     public List<SimpleStoredMessage> getMessages() {
+    //         return mailMessages;
+    //     }
 
-        public List<SimpleStoredMessage> getNonDeletedMessages() {
-            List<SimpleStoredMessage> ret = new ArrayList<SimpleStoredMessage>();
-            for (int i = 0; i < mailMessages.size(); i++) {
-                SimpleStoredMessage message = mailMessages.get(i);
-                if (!message.getFlags().contains(Flags.Flag.DELETED)) {
-                    ret.add(message);
-                }
-            }
-            return ret;
-        }
+    //     public List<SimpleStoredMessage> getNonDeletedMessages() {
+    //         List<SimpleStoredMessage> ret = new ArrayList<SimpleStoredMessage>();
+    //         for (int i = 0; i < mailMessages.size(); i++) {
+    //             SimpleStoredMessage message = mailMessages.get(i);
+    //             if (!message.getFlags().contains(Flags.Flag.DELETED)) {
+    //                 ret.add(message);
+    //             }
+    //         }
+    //         return ret;
+    //     }
 
-        public boolean isSelectable() {
-            return isSelectable;
-        }
+    //     public boolean isSelectable() {
+    //         return isSelectable;
+    //     }
 
-        public void setSelectable(boolean selectable) {
-            isSelectable = selectable;
-        }
+    //     public void setSelectable(boolean selectable) {
+    //         isSelectable = selectable;
+    //     }
 
-        public long appendMessage(MimeMessage message,
-                                  Flags flags,
-                                  Date internalDate) {
-            long uid = nextUid;
-            nextUid++;
+    //     public long appendMessage(MimeMessage message,
+    //                               Flags flags,
+    //                               Date internalDate) {
+    //         long uid = nextUid;
+    //         nextUid++;
 
-            //            flags.setRecent(true);
-            SimpleStoredMessage storedMessage = new SimpleStoredMessage(message, flags,
-                                                                        internalDate, uid);
-            storedMessage.getFlags().add(Flags.Flag.RECENT);
+    //         //            flags.setRecent(true);
+    //         SimpleStoredMessage storedMessage = new SimpleStoredMessage(message, flags,
+    //                                                                     internalDate, uid);
+    //         storedMessage.getFlags().add(Flags.Flag.RECENT);
 
-            mailMessages.add(storedMessage);
-            int newMsn = mailMessages.size();
+    //         mailMessages.add(storedMessage);
+    //         int newMsn = mailMessages.size();
 
-            // Notify all the listeners of the new message
-            synchronized (_mailboxListeners) {
-                for (int j = 0; j < _mailboxListeners.size(); j++) {
-                    FolderListener listener = _mailboxListeners.get(j);
-                    listener.added(newMsn);
-                }
-            }
+    //         // Notify all the listeners of the new message
+    //         synchronized (_mailboxListeners) {
+    //             for (int j = 0; j < _mailboxListeners.size(); j++) {
+    //                 FolderListener listener = _mailboxListeners.get(j);
+    //                 listener.added(newMsn);
+    //             }
+    //         }
 
-            return uid;
-        }
+    //         return uid;
+    //     }
 
-        public void setFlags(Flags flags, boolean value, long uid, FolderListener silentListener, boolean addUid) throws FolderException {
-            int msn = getMsn(uid);
-            SimpleStoredMessage message = mailMessages.get(msn - 1);
+    //     public void setFlags(Flags flags, boolean value, long uid, FolderListener silentListener, boolean addUid) throws FolderException {
+    //         int msn = getMsn(uid);
+    //         SimpleStoredMessage message = mailMessages.get(msn - 1);
 
-            if (value) {
-                message.getFlags().add(flags);
-            } else {
-                message.getFlags().remove(flags);
-            }
+    //         if (value) {
+    //             message.getFlags().add(flags);
+    //         } else {
+    //             message.getFlags().remove(flags);
+    //         }
 
-            Long uidNotification = null;
-            if (addUid) {
-                uidNotification = new Long(uid);
-            }
-            notifyFlagUpdate(msn, message.getFlags(), uidNotification, silentListener);
-        }
+    //         Long uidNotification = null;
+    //         if (addUid) {
+    //             uidNotification = new Long(uid);
+    //         }
+    //         notifyFlagUpdate(msn, message.getFlags(), uidNotification, silentListener);
+    //     }
 
-        public void replaceFlags(Flags flags, long uid, FolderListener silentListener, boolean addUid) throws FolderException {
-            int msn = getMsn(uid);
-            SimpleStoredMessage message = mailMessages.get(msn - 1);
-            message.getFlags().remove(MessageFlags.ALL_FLAGS);
-            message.getFlags().add(flags);
+    //     public void replaceFlags(Flags flags, long uid, FolderListener silentListener, boolean addUid) throws FolderException {
+    //         int msn = getMsn(uid);
+    //         SimpleStoredMessage message = mailMessages.get(msn - 1);
+    //         message.getFlags().remove(MessageFlags.ALL_FLAGS);
+    //         message.getFlags().add(flags);
 
-            Long uidNotification = null;
-            if (addUid) {
-                uidNotification = new Long(uid);
-            }
-            notifyFlagUpdate(msn, message.getFlags(), uidNotification, silentListener);
-        }
+    //         Long uidNotification = null;
+    //         if (addUid) {
+    //             uidNotification = new Long(uid);
+    //         }
+    //         notifyFlagUpdate(msn, message.getFlags(), uidNotification, silentListener);
+    //     }
 
-        private void notifyFlagUpdate(int msn, Flags flags, Long uidNotification, FolderListener silentListener) {
-            synchronized (_mailboxListeners) {
-                for (int i = 0; i < _mailboxListeners.size(); i++) {
-                    FolderListener listener = _mailboxListeners.get(i);
+    //     private void notifyFlagUpdate(int msn, Flags flags, Long uidNotification, FolderListener silentListener) {
+    //         synchronized (_mailboxListeners) {
+    //             for (int i = 0; i < _mailboxListeners.size(); i++) {
+    //                 FolderListener listener = _mailboxListeners.get(i);
 
-                    if (listener == silentListener) {
-                        continue;
-                    }
+    //                 if (listener == silentListener) {
+    //                     continue;
+    //                 }
 
-                    listener.flagsUpdated(msn, flags, uidNotification);
-                }
-            }
-        }
+    //                 listener.flagsUpdated(msn, flags, uidNotification);
+    //             }
+    //         }
+    //     }
 
-        public void deleteAllMessages() {
-            mailMessages.clear();
-        }
+    //     public void deleteAllMessages() {
+    //         mailMessages.clear();
+    //     }
 
-        public void store(MovingMessage mail) throws Exception {
-            store(mail.getMessage());
-        }
-
-
-        public void store(MimeMessage message) throws Exception {
-            Date internalDate = new Date();
-            store(message, internalDate);
-        }
-
-        public void store(MimeMessage message, Date internalDate) throws Exception {
-            Flags flags = new Flags();
-            appendMessage(message, flags, internalDate);
-        }
+    //     public void store(MovingMessage mail) throws Exception {
+    //         store(mail.getMessage());
+    //     }
 
 
-        public SimpleStoredMessage getMessage(long uid) {
-            for (int i = 0; i < mailMessages.size(); i++) {
-                SimpleStoredMessage message = mailMessages.get(i);
-                if (message.getUid() == uid) {
-                    return message;
-                }
-            }
-            return null;
-        }
+    //     public void store(MimeMessage message) throws Exception {
+    //         Date internalDate = new Date();
+    //         store(message, internalDate);
+    //     }
 
-        public long[] getMessageUids() {
-            long[] uids = new long[mailMessages.size()];
-            for (int i = 0; i < mailMessages.size(); i++) {
-                SimpleStoredMessage message = mailMessages.get(i);
-                uids[i] = message.getUid();
-            }
-            return uids;
-        }
+    //     public void store(MimeMessage message, Date internalDate) throws Exception {
+    //         Flags flags = new Flags();
+    //         appendMessage(message, flags, internalDate);
+    //     }
 
-        private void deleteMessage(int msn) {
-            mailMessages.remove(msn - 1); //NOTE BY WAEL: is this really correct, the number of items in the iterating list is changed see expunge()
-        }
 
-        public long[] search(Criteria searchTerm) {
-            ArrayList<SimpleStoredMessage> matchedMessages = new ArrayList<SimpleStoredMessage>();
+    //     public SimpleStoredMessage getMessage(long uid) {
+    //         for (int i = 0; i < mailMessages.size(); i++) {
+    //             SimpleStoredMessage message = mailMessages.get(i);
+    //             if (message.getUid() == uid) {
+    //                 return message;
+    //             }
+    //         }
+    //         return null;
+    //     }
 
-            for (int i = 0; i < mailMessages.size(); i++) {
-                SimpleStoredMessage message = mailMessages.get(i);
-                if (searchTerm.match(message)) {
-                    matchedMessages.add(message);
-                }
-            }
+    //     public long[] getMessageUids() {
+    //         long[] uids = new long[mailMessages.size()];
+    //         for (int i = 0; i < mailMessages.size(); i++) {
+    //             SimpleStoredMessage message = mailMessages.get(i);
+    //             uids[i] = message.getUid();
+    //         }
+    //         return uids;
+    //     }
 
-            long[] matchedUids = new long[matchedMessages.size()];
-            for (int i = 0; i < matchedUids.length; i++) {
-                SimpleStoredMessage storedMessage = matchedMessages.get(i);
-                long uid = storedMessage.getUid();
-                matchedUids[i] = uid;
-            }
-            return matchedUids;
-        }
+    //     private void deleteMessage(int msn) {
+    //         mailMessages.remove(msn - 1); //NOTE BY WAEL: is this really correct, the number of items in the iterating list is changed see expunge()
+    //     }
 
-        public long copyMessage(long uid, MailFolder toFolder)
-            throws FolderException {
-            SimpleStoredMessage originalMessage = getMessage(uid);
-            MimeMessage newMime = null;
-            try {
-                newMime = new MimeMessage(originalMessage.getMimeMessage());
-            } catch (MessagingException e) {
-                // TODO chain.
-                throw new FolderException("Messaging exception: " + e.getMessage());
-            }
-            Flags newFlags = new Flags();
-            newFlags.add(originalMessage.getFlags());
-            Date newDate = originalMessage.getInternalDate();
+    //     public long[] search(Criteria searchTerm) {
+    //         ArrayList<SimpleStoredMessage> matchedMessages = new ArrayList<SimpleStoredMessage>();
 
-            return toFolder.appendMessage(newMime, newFlags, newDate);
-        }
+    //         for (int i = 0; i < mailMessages.size(); i++) {
+    //             SimpleStoredMessage message = mailMessages.get(i);
+    //             if (searchTerm.match(message)) {
+    //                 matchedMessages.add(message);
+    //             }
+    //         }
 
-        public void expunge() throws FolderException {
-            for (int i = 0; i < mailMessages.size(); i++) {
-                SimpleStoredMessage message = mailMessages.get(i);
-                if (message.getFlags().contains(Flags.Flag.DELETED)) {
-                    expungeMessage(i + 1);
-                }
-            }
-            ((IFn)EXPUNGE.deref()).invoke(this, new AFn(){
-                    public Object invoke (Object arg) {
-                        for (int i = 0; i < mailMessages.size(); i++) {
-                            SimpleStoredMessage message = mailMessages.get(i);
-                            if (arg.equals(message.getUid())) {
-                                expungeMessage(i + 1);
-                            }
-                        }
-                        return null;
-                    }
-                });
-        }
+    //         long[] matchedUids = new long[matchedMessages.size()];
+    //         for (int i = 0; i < matchedUids.length; i++) {
+    //             SimpleStoredMessage storedMessage = matchedMessages.get(i);
+    //             long uid = storedMessage.getUid();
+    //             matchedUids[i] = uid;
+    //         }
+    //         return matchedUids;
+    //     }
 
-        private void expungeMessage(int msn) {
-            // Notify all the listeners of the pending delete
-            synchronized (_mailboxListeners) {
-                deleteMessage(msn);
-                for (int j = 0; j < _mailboxListeners.size(); j++) {
-                    FolderListener expungeListener = _mailboxListeners.get(j);
-                    expungeListener.expunged(msn);
-                }
-            }
+    //     public long copyMessage(long uid, MailFolder toFolder)
+    //         throws FolderException {
+    //         SimpleStoredMessage originalMessage = getMessage(uid);
+    //         MimeMessage newMime = null;
+    //         try {
+    //             newMime = new MimeMessage(originalMessage.getMimeMessage());
+    //         } catch (MessagingException e) {
+    //             // TODO chain.
+    //             throw new FolderException("Messaging exception: " + e.getMessage());
+    //         }
+    //         Flags newFlags = new Flags();
+    //         newFlags.add(originalMessage.getFlags());
+    //         Date newDate = originalMessage.getInternalDate();
 
-        }
+    //         return toFolder.appendMessage(newMime, newFlags, newDate);
+    //     }
 
-        public void addListener(FolderListener listener) {
-            synchronized (_mailboxListeners) {
-                _mailboxListeners.add(listener);
-            }
-        }
+    //     public void expunge() throws FolderException {
+    //         for (int i = 0; i < mailMessages.size(); i++) {
+    //             SimpleStoredMessage message = mailMessages.get(i);
+    //             if (message.getFlags().contains(Flags.Flag.DELETED)) {
+    //                 expungeMessage(i + 1);
+    //             }
+    //         }
+    //         ((IFn)EXPUNGE.deref()).invoke(this, new AFn(){
+    //                 public Object invoke (Object arg) {
+    //                     for (int i = 0; i < mailMessages.size(); i++) {
+    //                         SimpleStoredMessage message = mailMessages.get(i);
+    //                         if (arg.equals(message.getUid())) {
+    //                             expungeMessage(i + 1);
+    //                         }
+    //                     }
+    //                     return null;
+    //                 }
+    //             });
+    //     }
 
-        public void removeListener(FolderListener listener) {
-            synchronized (_mailboxListeners) {
-                _mailboxListeners.remove(listener);
-            }
-        }
-    }
+    //     private void expungeMessage(int msn) {
+    //         // Notify all the listeners of the pending delete
+    //         synchronized (_mailboxListeners) {
+    //             deleteMessage(msn);
+    //             for (int j = 0; j < _mailboxListeners.size(); j++) {
+    //                 FolderListener expungeListener = _mailboxListeners.get(j);
+    //                 expungeListener.expunged(msn);
+    //             }
+    //         }
+
+    //     }
+
+    //     public void addListener(FolderListener listener) {
+    //         synchronized (_mailboxListeners) {
+    //             _mailboxListeners.add(listener);
+    //         }
+    //     }
+
+    //     public void removeListener(FolderListener listener) {
+    //         synchronized (_mailboxListeners) {
+    //             _mailboxListeners.remove(listener);
+    //         }
+    //     }
+    // }
 }
