@@ -1,18 +1,12 @@
 (ns greenmail.store
+  (:require [clojure.set :as set])
   (:import (javax.mail Flags$Flag
                        Flags)
+           (javax.mail.internet MimeMessage)
            (com.icegreen.greenmail.store MailFolder
                                          SimpleStoredMessage
                                          MessageFlags)
            (java.util UUID)))
-
-(defn expunge [folder expunge-fun]
-  (while (not= (count (.getMessageUids folder))
-               (count (.getNonDeletedMessages folder)))
-    (doseq [uid (.getMessageUids folder)
-            :let [m (.getMessage folder uid)]
-            :when (.contains (.getFlags m) Flags$Flag/DELETED)]
-      (expunge-fun uid))))
 
 (def mail (ref {}))
 
@@ -49,10 +43,10 @@
     (.printStackTrace (Exception. "dumb")))
   (try
     (if (:root? (get @mail id))
-      (.getName (->HiMF id))
-      (str (.getFullName (:id (get-parent (->HiMF id))))
+      (:name (get @mail id))
+      (str (get-full-name (:parent (get @mail id)))
            hierarchy-delimiter-char
-           (.getName (->HiMF id))))
+           (:name (get @mail id))))
     (catch Exception e
       (prn id)
       (prn (get @mail id))
@@ -120,6 +114,46 @@
                :when (not= listener silent-listener)]
          (send-off a (fn [_] (.flagsUpdated msn flags (when add-uid? uid)))))))))
 
+(defn replace-flags [id flags uid silent-listener add-uid?]
+  (let [msn (get-msn id uid)
+        message (nth (:messages (get @mail id)) (dec msn))]
+    (.remove (.getFlags message) MessageFlags/ALL_FLAGS)
+    (.add (.getFlags message) flags)
+    (let [a (agent nil)
+          flags (.getFlags message)]
+      (dosync
+       (ensure mail)
+       (doseq [listener (:listeners (get @mail id))
+               :when (not= listener silent-listener)]
+         (send-off a (fn [_] (.flagsUpdated msn flags (when add-uid? uid)))))))))
+
+(defn expunge [id]
+  (let [a (agent nil)
+        kept (ref [])
+        expunged (ref [])]
+    (dosync
+     (doseq [[idx message] (keep-indexed vector (:messages (get @mail id)))]
+       (if (.contains (.getFlags message) Flags$Flag/DELETED)
+         (alter expunged conj (inc idx))
+         (alter kept conj message)))
+     (alter mail update-in [id] assoc :messages @kept)
+     (doseq [listener (:listeners (get @mail id))
+             msn @expunged]
+       (send-off a (fn [_] (.expunged listener msn)))))))
+
+(defn get-message [id uid]
+  (first (for [message (:messages (get @mail id))
+               :when (= uid (.getUid message))]
+           message)))
+
+(defn copy-message [id uid to-id]
+  (let [omsg (get-message uid)
+        nm (MimeMessage. (.getMimeMessage omsg))
+        nflags (Flags.)]
+    (append-message to-id
+                    (.add nflags (.getFlags omsg))
+                    (.getInternalDate omsg))))
+
 ;; HiMF is a dummy oop shell around a relational + functional
 ;; implementation
 
@@ -150,7 +184,8 @@
   (deleteAllMessages [_]
     (dosync
      (alter mail update-in [id :messages] empty)))
-  (expunge [f])
+  (expunge [_]
+    (throw (Exception.)))
   (addListener [_ listener]
     (dosync
      (alter mail update-in [id :listeners] conj listener)))
@@ -166,29 +201,18 @@
   (getMessageUids [_]
     (into-array Long/TYPE (map #(.getUid %) (:messages (get @mail id)))))
   (getMessage [_ uid]
-    (first (for [message (:messages (get @mail id))
-                 :when (= uid (.getUid message))]
-             message)))
+    (get-message id uid))
   (search [_ search-term]
     (into-array Long/TYPE
                 (for [message (:messages (get @mail id))
                       :when (.match search-term message)]
                   (.getUid message))))
-  (copyMessage [_ uid to-folder])
+  (copyMessage [_ uid to-folder]
+    (copy-message id uid (:id to-folder)))
   (setFlags [_ flags value? uid listener add-uid?]
     (set-flags id flags value? uid listener add-uid?))
   (replaceFlags [_ flags uid silent-listener add-uid?]
-    (let [msn (get-msn id uid)
-          message (nth (:messages (get @mail id)) (dec msn))]
-      (.remove (.getFlags message) MessageFlags/ALL_FLAGS)
-      (.add (.getFlags message) flags)
-      (let [a (agent nil)
-            flags (.getFlags message)]
-        (dosync
-         (ensure mail)
-         (doseq [listener (:listeners (get @mail id))
-                 :when (not= listener silent-listener)]
-           (send-off a (fn [_] (.flagsUpdated msn flags (when add-uid? uid)))))))))
+    (replace-flags id flags uid silent-listener add-uid?))
   (getMsn [_ uid]
     (get-msn id uid))
   (signalDeletion [_]
