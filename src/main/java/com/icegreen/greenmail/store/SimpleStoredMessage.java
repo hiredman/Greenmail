@@ -32,8 +32,8 @@ public class SimpleStoredMessage
         this(mimeMessage, mimeMessage.getFlags(), internalDate, uid);
     }
 
-    SimpleStoredMessage(MimeMessage mimeMessage, Flags flags,
-                        Date internalDate, long uid) {
+    public SimpleStoredMessage(MimeMessage mimeMessage, Flags flags,
+                               Date internalDate, long uid) {
         this.mimeMessage = mimeMessage;
         this.flags = flags;
         this.internalDate = internalDate;

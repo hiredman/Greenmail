@@ -1,7 +1,8 @@
 (ns greenmail.store
   (:import (javax.mail Flags$Flag
                        Flags)
-           (com.icegreen.greenmail.store MailFolder)
+           (com.icegreen.greenmail.store MailFolder
+                                         SimpleStoredMessage)
            (java.util UUID)))
 
 (defn expunge [folder expunge-fun]
@@ -16,13 +17,36 @@
 
 (defprotocol HasChildren
   (get-children [_])
-  (get-child [_ child-id]))
+  (get-child [_ child-id])
+  (add-child [_ child])
+  (remove-child [_ child]))
 
 (defprotocol HasParent
   (get-parent [_]))
 
 (defprotocol Nameable
   (set-name [_ new-name]))
+
+(defprotocol SelectEnabling
+  (set-selectable [_ v]))
+
+(extend-type com.icegreen.greenmail.store.InMemoryStore$HierarchicalFolder
+  HasChildren
+  (get-children [f]
+    (.getChildren f))
+  (get-child [f child-id]
+    (.getChild f child-id))
+  (add-child [f child]
+    (.add (get-children f) child))
+  HasParent
+  (get-parent [f]
+    (.getParent f))
+  Nameable
+  (set-name [f n]
+    (.setName f n))
+  SelectEnabling
+  (set-selectable [f v]
+    (.setSelectable f v)))
 
 (def hierarchy-delimiter-char ".")
 
@@ -76,6 +100,35 @@
      (doseq [listener (:listeners (get @mail id))]
        (send-off a (fn [_] (.mailboxDeleted listener)))))))
 
+(defn append-message [id message flags internal-date]
+  (let [a (agent nil)]
+    (dosync
+     (let [uid (:next-uid (get @mail id))
+           smsg (SimpleStoredMessage. message flags internal-date uid)]
+       (alter mail update-in [id :next-uid] inc)
+       (.add (.getFlags smsg) Flags$Flag/RECENT)
+       (alter mail update-in [id :messages] conj smsg)
+       (let [i (count (:messages (get @mail id)))]
+         (doseq [listener (:listeners (get @mail id))]
+           (send-off a (fn [_] (.added listener i)))))))))
+
+(defn set-flags [id flags value? uid silent-listener add-uid?]
+  (let [msn (get-msn id uid)
+        message (nth (:messages (get @mail id)) (dec msn))]
+    (if value?
+      (.add (.getFlags message) flags)
+      (.remove (.getFlags message) flags))
+    (let [a (agent nil)
+          flags (.getFlags message)]
+      (dosync
+       (ensure mail)
+       (doseq [listener (:listeners (get @mail id))
+               :when (not= listener silent-listener)]
+         (send-off a (fn [_] (.flagsUpdated msn flags (when add-uid? uid)))))))))
+
+;; HiMF is a dummy oop shell around a relational + functional
+;; implementation
+
 (defrecord HiMF [id]
   MailFolder
   (getName [_]
@@ -98,7 +151,8 @@
     (boolean (:selectable? (get @mail id))))
   (getUidNext [_]
     (:next-uid (get @mail id)))
-  (appendMessage [_ message flags internal-date])
+  (appendMessage [_ message flags internal-date]
+    (append-message id message flags internal-date))
   (deleteAllMessages [_])
   (expunge [_])
   (addListener [_ listener])
@@ -110,7 +164,8 @@
   (getMessageUids [_])
   (search [_ search-term])
   (copyMessage [_ uid to-folder])
-  (setFlags [_ flags value? uid listener add-uid?])
+  (setFlags [_ flags value? uid listener add-uid?]
+    (set-flags id flags value? uid listener add-uid?))
   (replaceFlags [_ flags uid listener add-uid?])
   (getMsn [_ uid]
     (get-msn id uid))
@@ -137,6 +192,12 @@
     (first (for [child (get-children folder)
                  :when (.equalsIgnoreCase (.getName child) child-name)]
              child)))
+  (add-child [_ child]
+    (dosync
+     (alter mail update-in [id :children] conj (:id child))))
+  (remove-child [_ child]
+    (dosync
+     (alter mail update-in [id :children] disj (:id child))))
   HasParent
   (get-parent [_]
     (when-let [parent-id (:parent (get @mail id))]
@@ -144,8 +205,11 @@
   Nameable
   (set-name [_ new-name]
     (dosync
-     (alter mail update-in [id] assoc :name new-name))))
-
+     (alter mail update-in [id] assoc :name new-name)))
+  SelectEnabling
+  (set-selectable [_ v]
+    (dosync
+     (alter mail update-in [id] assoc :selectable? (boolean v)))))
 
 (defn hier-mail-folder [parent name]
   (let [id (UUID/randomUUID)]
@@ -154,5 +218,6 @@
                            :name name
                            :uid-validity 0
                            :next-uid 1
-                           :messages []}))
+                           :messages []
+                           :children #{}}))
     (->HiMF id)))
