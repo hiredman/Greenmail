@@ -236,7 +236,7 @@
 (defn mail-folder [parent name & [root?]]
   (let [id (UUID/randomUUID)]
     (dosync
-     (alter mail assoc id {:parent parent
+     (alter mail assoc id {:parent (:id parent)
                            :name name
                            :uid-validity 0
                            :next-uid 1
