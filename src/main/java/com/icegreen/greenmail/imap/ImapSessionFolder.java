@@ -24,6 +24,7 @@ import com.icegreen.greenmail.store.FolderException;
 import com.icegreen.greenmail.store.FolderListener;
 import com.icegreen.greenmail.store.MailFolder;
 import com.icegreen.greenmail.store.SimpleStoredMessage;
+import com.icegreen.greenmail.store.InMemoryStore;
 
 public class ImapSessionFolder implements MailFolder, FolderListener {
     private MailFolder _folder;
@@ -206,7 +207,7 @@ public class ImapSessionFolder implements MailFolder, FolderListener {
     }
 
     public void expunge() throws FolderException {
-        _folder.expunge();
+        InMemoryStore.expunge(_folder);
     }
 
     public long[] search(Criteria searchTerm) {

@@ -12,6 +12,7 @@ import com.icegreen.greenmail.imap.ImapSession;
 import com.icegreen.greenmail.imap.ProtocolException;
 import com.icegreen.greenmail.store.FolderException;
 import com.icegreen.greenmail.store.MailFolder;
+import com.icegreen.greenmail.store.InMemoryStore;
 
 /**
  * Handles processeing for the CHECK imap command.
@@ -34,7 +35,7 @@ class CloseCommand extends SelectedStateCommand {
 
         if (!session.getSelected().isReadonly()) {
             MailFolder folder = session.getSelected();
-            folder.expunge();
+            InMemoryStore.expunge(folder);
         }
         session.deselect();
         
