@@ -191,7 +191,7 @@
      (alter mail update-in [id :listeners] conj listener)))
   (removeListener [_ listener]
     (dosync
-     (alter mail update-in [id :listeners] remove  (partial = listener))))
+     (alter mail update-in [id :listeners] (partial remove (partial = listener)))))
   (^void store [folder ^com.icegreen.greenmail.mail.MovingMessage mail]
     (.store folder (.getMessage mail)))
   (^void store [folder ^javax.mail.internet.MimeMessage mail]
