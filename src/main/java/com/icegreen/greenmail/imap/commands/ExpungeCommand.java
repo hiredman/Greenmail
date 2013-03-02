@@ -38,7 +38,7 @@ class ExpungeCommand extends SelectedStateCommand {
         }
 
         MailFolder folder = session.getSelected();
-        InMemoryStore.expunge(folder);
+        folder.expunge();
         session.unsolicitedResponses(response);
         response.commandComplete(this);
     }
