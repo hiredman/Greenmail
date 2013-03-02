@@ -10,6 +10,10 @@
 
 (def mail (ref {}))
 
+(defn clear-mail []
+  (dosync
+   (ref-set mail {})))
+
 (defprotocol HasChildren
   (get-children [_])
   (get-child [_ child-id])

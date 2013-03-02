@@ -24,15 +24,33 @@ import com.icegreen.greenmail.store.SimpleStoredMessage;
 import com.icegreen.greenmail.user.GreenMailUser;
 import com.icegreen.greenmail.user.UserException;
 
+import clojure.lang.RT;
+import clojure.lang.Var;
+import clojure.lang.Symbol;
+import clojure.lang.IFn;
+import clojure.lang.AFn;
+import clojure.lang.IDeref;
+import clojure.lang.Keyword;
+
 /**
  * @author Wael Chatila
  * @version $Id: $
  * @since Jan 28, 2006
  */
 public class GreenMail {
+
+    public static Var REQUIRE = RT.var("clojure.core","require");
+    public static Symbol GREENMAIL_STORE = Symbol.intern("greenmail.store");
+    public static Var CLEAR_MAIL = RT.var("greenmail.store","clear-mail");
+
 	Semaphore lock = new Semaphore(1);
     Managers managers;
     HashMap<String, Service> services;
+
+    static {
+        REQUIRE.invoke(GREENMAIL_STORE);
+    }
+
 
     /**
      * Creates a SMTP, SMTPS, POP3, POP3S, IMAP, and IMAPS server binding onto non-default ports.
@@ -55,6 +73,7 @@ public class GreenMail {
      * @param config
      */
     public GreenMail(ServerSetup[] config) {
+        CLEAR_MAIL.invoke();
         managers = new Managers();
         services = new HashMap<String, Service>();
         for (int i = 0; i < config.length; i++) {
