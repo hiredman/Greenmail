@@ -1,11 +1,13 @@
 (ns greenmail.store
-  (:require [clojure.set :as set])
+  (:require [clojure.set :as set]
+            [clojure.stacktrace :as s])
   (:import (javax.mail Flags$Flag
                        Flags)
            (javax.mail.internet MimeMessage)
            (com.icegreen.greenmail.store MailFolder
                                          SimpleStoredMessage
-                                         MessageFlags)
+                                         MessageFlags
+                                         FolderListener)
            (java.util UUID)))
 
 (def mail (ref {}))
@@ -13,6 +15,9 @@
 (defn clear-mail []
   (dosync
    (ref-set mail {})))
+
+(defn agent-print-trace [_ e]
+  (s/print-stack-trace e))
 
 (defprotocol HasChildren
   (get-children [_])
@@ -42,9 +47,6 @@
 (declare ->HiMF)
 
 (defn get-full-name [id]
-  ;; TODO: get rid of calls to ->HiMF here
-  (when (not (instance? UUID id))
-    (.printStackTrace (Exception. "dumb")))
   (if (:root? (get @mail id))
     (:name (get @mail id))
     (str (get-full-name (:parent (get @mail id)))
@@ -55,7 +57,7 @@
   (count (:all (:messages (get @mail id)))))
 
 (defn recent-count [id reset?]
-  (apply + (for [{:keys [message]} (:all (:messages (get @mail id)))
+  (apply + (for [{:keys [^SimpleStoredMessage message]} (:all (:messages (get @mail id)))
                  :when (.contains (.getFlags message) Flags$Flag/RECENT)]
              (do
                (when reset?
@@ -63,33 +65,32 @@
                1))))
 
 (defn get-first-unseen [id]
-  (or (first (for [{:keys [message msn]} (:all (:messages (get @mail id)))
+  (or (first (for [{:keys [^SimpleStoredMessage message msn]} (:all (:messages (get @mail id)))
                    :when (not (.contains (.getFlags message) Flags$Flag/SEEN))]
                msn))
       -1))
 
 (defn get-unseen-count [id]
-  (apply + (for [{:keys [message msn]} (:all (:messages (get @mail id)))
-                   :when (not (.contains (.getFlags message) Flags$Flag/SEEN))]
-               1)))
+  (apply + (for [{:keys [^SimpleStoredMessage message msn]} (:all (:messages (get @mail id)))
+                 :when (not (.contains (.getFlags message) Flags$Flag/SEEN))]
+             1)))
 
 (defn get-msn [id uid]
   (first
-   (for [{:keys [message msn]}(get (:messages (get @mail id)) {:msn id})
+   (for [{:keys [^SimpleStoredMessage message msn]} (get (:messages (get @mail id)) {:msn id})
          :when (= (.getUid message) uid)]
      msn)))
 
 (defn signal-deletion [id]
   (let [a (agent nil)]
-    (set-error-handler! a (fn [_ e]
-                            (.printStackTrace e)))
+    (set-error-handler! a agent-print-trace)
     (dosync
      (ensure mail)
-     (doseq [listener (:listeners (get @mail id))]
+     (doseq [^FolderListener listener (:listeners (get @mail id))]
        (send-off a (fn [_] (.mailboxDeleted listener)))))
     (await a)))
 
-(defn add-message [m msg]
+(defn add-message [m ^SimpleStoredMessage msg]
   (let [uid (.getUid msg)
         msn (inc (count (:all m)))
         nm {:uid uid
@@ -103,8 +104,7 @@
 
 (defn append-message [id message flags internal-date]
   (let [a (agent nil)
-        _ (set-error-handler! a (fn [_ e]
-                                  (.printStackTrace e)))
+        _ (set-error-handler! a agent-print-trace)
         uid (dosync
              (let [uid (:next-uid (get @mail id))
                    smsg (SimpleStoredMessage. message flags internal-date uid)]
@@ -112,62 +112,59 @@
                (.add (.getFlags smsg) Flags$Flag/RECENT)
                (alter mail update-in [id :messages] add-message smsg)
                (let [i (count (:all (:messages (get @mail id))))]
-                 (doseq [listener (:listeners (get @mail id))]
+                 (doseq [^FolderListener listener (:listeners (get @mail id))]
                    (send-off a (fn [_] (.added listener i)))))
                uid))]
     (await a)
     uid))
 
-(defn set-flags [id flags value? uid silent-listener add-uid?]
-  (let [{:keys [msn message]} (first (get (:messages (get @mail id)) {:uid uid}))]
+(defn set-flags [id ^Flags flags value? uid silent-listener add-uid?]
+  (let [{:keys [msn ^SimpleStoredMessage message]} (first (get (:messages (get @mail id)) {:uid uid}))]
     (if value?
       (.add (.getFlags message) flags)
       (.remove (.getFlags message) flags))
     (let [a (agent nil)
           flags (.getFlags message)]
-      (set-error-handler! a (fn [_ e]
-                              (.printStackTrace e)))
+      (set-error-handler! a agent-print-trace)
       (dosync
        (ensure mail)
-       (doseq [listener (:listeners (get @mail id))
+       (doseq [^FolderListener listener (:listeners (get @mail id))
                :when (not= listener silent-listener)]
          (send-off a (fn [_] (.flagsUpdated listener msn flags (when add-uid? uid))))))
       (await a))))
 
-(defn replace-flags [id flags uid silent-listener add-uid?]
-  (let [{:keys [msn message]} (get (:messages (get @mail id)) {:uid uid})]
+(defn replace-flags [id ^Flags flags uid silent-listener add-uid?]
+  (let [{:keys [msn ^SimpleStoredMessage message]} (get (:messages (get @mail id)) {:uid uid})]
     (.remove (.getFlags message) MessageFlags/ALL_FLAGS)
     (.add (.getFlags message) flags)
     (let [a (agent nil)
           flags (.getFlags message)]
-      (set-error-handler! a (fn [_ e]
-                              (.printStackTrace e)))
+      (set-error-handler! a agent-print-trace)
       (dosync
        (ensure mail)
-       (doseq [listener (:listeners (get @mail id))
+       (doseq [^FolderListener listener (:listeners (get @mail id))
                :when (not= listener silent-listener)]
          (send-off a (fn [_] (.flagsUpdated listener msn flags (when add-uid? uid))))))
       (await a))))
 
 (defn expunge [id]
   (let [a (agent nil)]
-    (set-error-handler! a (fn [_ e]
-                            (.printStackTrace e)))
+    (set-error-handler! a agent-print-trace)
     (dosync
      (let [{:keys [messages]} (get @mail id)
            {deleted true
             kept false} (group-by
-                         (fn [{:keys [message]}]
+                         (fn [{:keys [^SimpleStoredMessage message]}]
                            (.contains (.getFlags message) Flags$Flag/DELETED))
                          (:all messages))]
        (alter mail update-in [id] assoc :messages
               (reduce add-message {} (map :message kept)))
-       (doseq [listener (:listeners (get @mail id))
+       (doseq [^FolderListener listener (:listeners (get @mail id))
                {:keys [msn]} deleted]
          (send-off a (fn [_] (.expunged listener msn))))))
     (await a)))
 
-(defn get-message [id uid]
+(defn ^SimpleStoredMessage get-message [id uid]
   (:message (first (get (:messages (get @mail id)) {:uid uid}))))
 
 (defn copy-message [id uid to-id]
@@ -223,7 +220,7 @@
   (^void store [folder ^javax.mail.internet.MimeMessage mail ^java.util.Date internal-date]
     (.appendMessage folder mail (Flags.) internal-date))
   (getMessageUids [_]
-    (into-array Long/TYPE (map #(.getUid (:message %)) (:all (:messages (get @mail id))))))
+    (into-array Long/TYPE (map #(.getUid ^SimpleStoredMessage (:message %)) (:all (:messages (get @mail id))))))
   (getMessage [_ uid]
     (get-message id uid))
   (search [_ search-term]
@@ -242,25 +239,27 @@
   (signalDeletion [_]
     (signal-deletion id))
   (getMessages [_]
-    (java.util.ArrayList.
-     (map :message (sort-by :msn (:all (:messages (get @mail id)))))))
+    (let [s (map :message (sort-by :msn (:all (:messages (get @mail id)))))]
+      (java.util.ArrayList. ^java.util.Collection s)))
   (getMessages [_ range-filter]
-    (java.util.ArrayList.
-     (for [{:keys [msn message]} (sort-by :msn (:all (:messages (get @mail id))))
-           :when (.includes range-filter msn)]
-       message)))
+    (let [s (for [{:keys [msn message]} (sort-by :msn (:all (:messages (get @mail id))))
+                  :when (.includes range-filter msn)]
+              message)]
+      (java.util.ArrayList. ^java.util.Collection s)))
   (getNonDeletedMessages [_]
-    (java.util.ArrayList.
-     (for [{:keys [message]} (:all (:messages (get @mail id)))
-           :when (not (.contains (.getFlags message) Flags$Flag/DELETED))]
-       message)))
+    (let [s (for [{:keys [^SimpleStoredMessage message]} (:all (:messages (get @mail id)))
+                  :when (not (.contains (.getFlags message) Flags$Flag/DELETED))]
+              message)]
+      (java.util.ArrayList. ^java.util.Collection s)))
   HasChildren
   (get-children [_]
     (map ->HiMF (:children (get @mail id))))
   (get-child [folder child-name]
-    (first (for [child (get-children folder)
-                 :when (.equalsIgnoreCase (.getName child) child-name)]
-             child)))
+    (first (for [child-id (:children (get @mail id))
+                 :when (.equalsIgnoreCase
+                        ^String (:name (get @mail child-id))
+                        child-name)]
+             (->HiMF child-id))))
   (add-child [_ child]
     (dosync
      (alter mail update-in [id :children] conj (:id child))))
