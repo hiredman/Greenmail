@@ -1,4 +1,5 @@
 (ns greenmail.pop3
+  (:require [greenmail.store :as store])
   (:import (com.icegreen.greenmail.pop3.commands Pop3Command)
            (com.icegreen.greenmail.store FolderException)
            (com.icegreen.greenmail.util GreenMailUtil)
@@ -12,9 +13,7 @@
 (defn quit-execute [conn state cmd]
   (try
     (when-let [folder (.getFolder state)]
-      (while (not= (.getMessageCount folder)
-                   (count (.getNonDeletedMessages folder)))
-        (.expunge folder)))
+      (store/expunge (:id folder)))
     (.println conn "+OK by see you soon")
     (.quit conn)
     (catch FolderException e
