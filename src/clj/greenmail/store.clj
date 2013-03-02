@@ -52,10 +52,10 @@
          (:name (get @mail id)))))
 
 (defn get-message-count [id]
-  (count (:messages (get @mail id))))
+  (count (:all (:messages (get @mail id)))))
 
 (defn recent-count [id reset?]
-  (apply + (for [message (:messages (get @mail id))
+  (apply + (for [{:keys [message]} (:all (:messages (get @mail id)))
                  :when (.contains (.getFlags message) Flags$Flag/RECENT)]
              (do
                (when reset?
@@ -63,21 +63,21 @@
                1))))
 
 (defn get-first-unseen [id]
-  (or (first (for [[idx message] (map vector (range) (:messages (get @mail id)))
+  (or (first (for [{:keys [message msn]} (:all (:messages (get @mail id)))
                    :when (not (.contains (.getFlags message) Flags$Flag/SEEN))]
-               (inc idx)))
+               msn))
       -1))
 
 (defn get-unseen-count [id]
-  (apply + (for [message (:messages (get @mail id))
-                 :when (not (.contains (.getFlags message) Flags$Flag/SEEN))]
-             1)))
+  (apply + (for [{:keys [message msn]} (:all (:messages (get @mail id)))
+                   :when (not (.contains (.getFlags message) Flags$Flag/SEEN))]
+               1)))
 
 (defn get-msn [id uid]
   (first
-   (for [[idx message] (map vector (range) (:messages (get @mail id)))
+   (for [{:keys [message msn]}(get (:messages (get @mail id)) {:msn id})
          :when (= (.getUid message) uid)]
-     (inc idx))))
+     msn)))
 
 (defn signal-deletion [id]
   (let [a (agent nil)]
@@ -89,6 +89,18 @@
        (send-off a (fn [_] (.mailboxDeleted listener)))))
     (await a)))
 
+(defn add-message [m msg]
+  (let [uid (.getUid msg)
+        msn (inc (count (:all m)))
+        nm {:uid uid
+            :msn msn
+            :message msg}]
+    (merge-with into
+                m
+                (set/index #{nm} [:uid])
+                (set/index #{nm} [:msn])
+                {:all #{nm}})))
+
 (defn append-message [id message flags internal-date]
   (let [a (agent nil)
         _ (set-error-handler! a (fn [_ e]
@@ -98,8 +110,8 @@
                    smsg (SimpleStoredMessage. message flags internal-date uid)]
                (alter mail update-in [id :next-uid] inc)
                (.add (.getFlags smsg) Flags$Flag/RECENT)
-               (alter mail update-in [id :messages] conj smsg)
-               (let [i (count (:messages (get @mail id)))]
+               (alter mail update-in [id :messages] add-message smsg)
+               (let [i (count (:all (:messages (get @mail id))))]
                  (doseq [listener (:listeners (get @mail id))]
                    (send-off a (fn [_] (.added listener i)))))
                uid))]
@@ -107,8 +119,7 @@
     uid))
 
 (defn set-flags [id flags value? uid silent-listener add-uid?]
-  (let [msn (get-msn id uid)
-        message (nth (:messages (get @mail id)) (dec msn))]
+  (let [{:keys [msn message]} (first (get (:messages (get @mail id)) {:uid uid}))]
     (if value?
       (.add (.getFlags message) flags)
       (.remove (.getFlags message) flags))
@@ -124,8 +135,7 @@
       (await a))))
 
 (defn replace-flags [id flags uid silent-listener add-uid?]
-  (let [msn (get-msn id uid)
-        message (nth (:messages (get @mail id)) (dec msn))]
+  (let [{:keys [msn message]} (get (:messages (get @mail id)) {:uid uid})]
     (.remove (.getFlags message) MessageFlags/ALL_FLAGS)
     (.add (.getFlags message) flags)
     (let [a (agent nil)
@@ -140,26 +150,25 @@
       (await a))))
 
 (defn expunge [id]
-  (let [a (agent nil)
-        kept (ref [])
-        expunged (ref [])]
+  (let [a (agent nil)]
     (set-error-handler! a (fn [_ e]
                             (.printStackTrace e)))
     (dosync
-     (doseq [[idx message] (keep-indexed vector (:messages (get @mail id)))]
-       (if (.contains (.getFlags message) Flags$Flag/DELETED)
-         (alter expunged conj (inc idx))
-         (alter kept conj message)))
-     (alter mail update-in [id] assoc :messages @kept)
-     (doseq [listener (:listeners (get @mail id))
-             msn @expunged]
-       (send-off a (fn [_] (.expunged listener msn)))))
+     (let [{:keys [messages]} (get @mail id)
+           {deleted true
+            kept false} (group-by
+                         (fn [{:keys [message]}]
+                           (.contains (.getFlags message) Flags$Flag/DELETED))
+                         (:all messages))]
+       (alter mail update-in [id] assoc :messages
+              (reduce add-message {} (map :message kept)))
+       (doseq [listener (:listeners (get @mail id))
+               {:keys [msn]} deleted]
+         (send-off a (fn [_] (.expunged listener msn))))))
     (await a)))
 
 (defn get-message [id uid]
-  (first (for [message (:messages (get @mail id))
-               :when (= uid (.getUid message))]
-           message)))
+  (:message (first (get (:messages (get @mail id)) {:uid uid}))))
 
 (defn copy-message [id uid to-id]
   (let [omsg (get-message uid)
@@ -214,14 +223,14 @@
   (^void store [folder ^javax.mail.internet.MimeMessage mail ^java.util.Date internal-date]
     (.appendMessage folder mail (Flags.) internal-date))
   (getMessageUids [_]
-    (into-array Long/TYPE (map #(.getUid %) (:messages (get @mail id)))))
+    (into-array Long/TYPE (map #(.getUid (:message %)) (:all (:messages (get @mail id))))))
   (getMessage [_ uid]
     (get-message id uid))
   (search [_ search-term]
     (into-array Long/TYPE
-                (for [message (:messages (get @mail id))
+                (for [{:keys [message uid]} (:all (:messages (get @mail id)))
                       :when (.match search-term message)]
-                  (.getUid message))))
+                  uid)))
   (copyMessage [_ uid to-folder]
     (copy-message id uid (:id to-folder)))
   (setFlags [_ flags value? uid listener add-uid?]
@@ -233,17 +242,16 @@
   (signalDeletion [_]
     (signal-deletion id))
   (getMessages [_]
-    (java.util.ArrayList. (:messages (get @mail id))))
+    (java.util.ArrayList.
+     (map :message (:all (:messages (get @mail id))))))
   (getMessages [_ range-filter]
     (java.util.ArrayList.
-     (keep-indexed
-      (fn [idx message]
-        (when (.includes range-filter (inc idx))
-          message))
-      (:messages (get @mail id)))))
+     (for [{:keys [msn message]} (:all (:messages (get @mail id)))
+           :when (.includes range-filter msn)]
+       message)))
   (getNonDeletedMessages [_]
     (java.util.ArrayList.
-     (for [message (:messages (get @mail id))
+     (for [{:keys [message]} (:all (:messages (get @mail id)))
            :when (not (.contains (.getFlags message) Flags$Flag/DELETED))]
        message)))
   HasChildren
@@ -279,7 +287,7 @@
                            :name name
                            :uid-validity 0
                            :next-uid 1
-                           :messages []
+                           :messages {}
                            :children #{}
                            :root? (boolean root?)}))
     (->HiMF id)))
