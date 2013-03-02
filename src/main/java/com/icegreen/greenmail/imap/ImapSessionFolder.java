@@ -26,6 +26,14 @@ import com.icegreen.greenmail.store.MailFolder;
 import com.icegreen.greenmail.store.SimpleStoredMessage;
 import com.icegreen.greenmail.store.InMemoryStore;
 
+import clojure.lang.RT;
+import clojure.lang.Var;
+import clojure.lang.Symbol;
+import clojure.lang.IFn;
+import clojure.lang.AFn;
+import clojure.lang.IDeref;
+import clojure.lang.Keyword;
+
 public class ImapSessionFolder implements MailFolder, FolderListener {
     private MailFolder _folder;
     private ImapSession _session;
@@ -33,6 +41,15 @@ public class ImapSessionFolder implements MailFolder, FolderListener {
     private boolean _sizeChanged;
     private List<Integer> _expungedMsns = Collections.synchronizedList(new LinkedList<Integer>());
     private Map<Integer, FlagUpdate> _modifiedFlags = Collections.synchronizedMap(new TreeMap<Integer, FlagUpdate>());
+
+    public static Var REQUIRE = RT.var("clojure.core","require");
+    public static Symbol GREENMAIL_STORE = Symbol.intern("greenmail.store");
+    public static Var GET_MSN = RT.var("greenmail.store","get-msn");
+    public static Keyword ID = Keyword.intern("id");
+
+    static {
+        REQUIRE.invoke(GREENMAIL_STORE);
+    }
 
     public ImapSessionFolder(MailFolder folder, ImapSession session, boolean readonly) {
         _folder = folder;
@@ -48,14 +65,10 @@ public class ImapSessionFolder implements MailFolder, FolderListener {
     }
 
     public int getMsn(long uid) throws FolderException {
-        long[] uids = _folder.getMessageUids();
-        for (int i = 0; i < uids.length; i++) {
-            long messageUid = uids[i];
-            if (uid == messageUid) {
-                return i + 1;
-            }
-        }
-        throw new FolderException("No such message.");
+        Object r = ((IFn)GET_MSN.deref()).invoke(RT.get(_folder,ID),uid);
+        if (r == null)
+            throw new FolderException("No such message.");
+        return (int)r;
     }
 
     public void signalDeletion() {
