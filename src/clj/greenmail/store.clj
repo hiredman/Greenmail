@@ -243,10 +243,10 @@
     (signal-deletion id))
   (getMessages [_]
     (java.util.ArrayList.
-     (map :message (:all (:messages (get @mail id))))))
+     (map :message (sort-by :msn (:all (:messages (get @mail id)))))))
   (getMessages [_ range-filter]
     (java.util.ArrayList.
-     (for [{:keys [msn message]} (:all (:messages (get @mail id)))
+     (for [{:keys [msn message]} (sort-by :msn (:all (:messages (get @mail id))))
            :when (.includes range-filter msn)]
        message)))
   (getNonDeletedMessages [_]
