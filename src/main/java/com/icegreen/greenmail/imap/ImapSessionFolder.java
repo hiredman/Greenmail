@@ -68,7 +68,7 @@ public class ImapSessionFolder implements MailFolder, FolderListener {
         Object r = ((IFn)GET_MSN.deref()).invoke(RT.get(_folder,ID),uid);
         if (r == null)
             throw new FolderException("No such message.");
-        return (int)r;
+        return ((Long)r).intValue();
     }
 
     public void signalDeletion() {
