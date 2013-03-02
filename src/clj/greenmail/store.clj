@@ -41,16 +41,11 @@
   ;; TODO: get rid of calls to ->HiMF here
   (when (not (instance? UUID id))
     (.printStackTrace (Exception. "dumb")))
-  (try
-    (if (:root? (get @mail id))
-      (:name (get @mail id))
-      (str (get-full-name (:parent (get @mail id)))
-           hierarchy-delimiter-char
-           (:name (get @mail id))))
-    (catch Exception e
-      (prn id)
-      (prn (get @mail id))
-      (throw e))))
+  (if (:root? (get @mail id))
+    (:name (get @mail id))
+    (str (get-full-name (:parent (get @mail id)))
+         hierarchy-delimiter-char
+         (:name (get @mail id)))))
 
 (defn get-message-count [id]
   (count (:messages (get @mail id))))
