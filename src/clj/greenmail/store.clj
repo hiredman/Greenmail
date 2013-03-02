@@ -82,23 +82,30 @@
 
 (defn signal-deletion [id]
   (let [a (agent nil)]
+    (set-error-handler! a (fn [_ e]
+                            (.printStackTrace e)))
     (dosync
      (ensure mail)
      (doseq [listener (:listeners (get @mail id))]
-       (send-off a (fn [_] (.mailboxDeleted listener)))))))
+       (send-off a (fn [_] (.mailboxDeleted listener)))))
+    (await a)))
 
 (defn append-message [id message flags internal-date]
-  (let [a (agent nil)]
-    (dosync
-     (let [uid (:next-uid (get @mail id))
-           smsg (SimpleStoredMessage. message flags internal-date uid)]
-       (alter mail update-in [id :next-uid] inc)
-       (.add (.getFlags smsg) Flags$Flag/RECENT)
-       (alter mail update-in [id :messages] conj smsg)
-       (let [i (count (:messages (get @mail id)))]
-         (doseq [listener (:listeners (get @mail id))]
-           (send-off a (fn [_] (.added listener i)))))
-       uid))))
+  (let [a (agent nil)
+        _ (set-error-handler! a (fn [_ e]
+                                  (.printStackTrace e)))
+        uid (dosync
+             (let [uid (:next-uid (get @mail id))
+                   smsg (SimpleStoredMessage. message flags internal-date uid)]
+               (alter mail update-in [id :next-uid] inc)
+               (.add (.getFlags smsg) Flags$Flag/RECENT)
+               (alter mail update-in [id :messages] conj smsg)
+               (let [i (count (:messages (get @mail id)))]
+                 (doseq [listener (:listeners (get @mail id))]
+                   (send-off a (fn [_] (.added listener i)))))
+               uid))]
+    (await a)
+    uid))
 
 (defn set-flags [id flags value? uid silent-listener add-uid?]
   (let [msn (get-msn id uid)
@@ -108,11 +115,14 @@
       (.remove (.getFlags message) flags))
     (let [a (agent nil)
           flags (.getFlags message)]
+      (set-error-handler! a (fn [_ e]
+                              (.printStackTrace e)))
       (dosync
        (ensure mail)
        (doseq [listener (:listeners (get @mail id))
                :when (not= listener silent-listener)]
-         (send-off a (fn [_] (.flagsUpdated msn flags (when add-uid? uid)))))))))
+         (send-off a (fn [_] (.flagsUpdated listener msn flags (when add-uid? uid))))))
+      (await a))))
 
 (defn replace-flags [id flags uid silent-listener add-uid?]
   (let [msn (get-msn id uid)
@@ -121,16 +131,21 @@
     (.add (.getFlags message) flags)
     (let [a (agent nil)
           flags (.getFlags message)]
+      (set-error-handler! a (fn [_ e]
+                              (.printStackTrace e)))
       (dosync
        (ensure mail)
        (doseq [listener (:listeners (get @mail id))
                :when (not= listener silent-listener)]
-         (send-off a (fn [_] (.flagsUpdated msn flags (when add-uid? uid)))))))))
+         (send-off a (fn [_] (.flagsUpdated listener msn flags (when add-uid? uid))))))
+      (await a))))
 
 (defn expunge [id]
   (let [a (agent nil)
         kept (ref [])
         expunged (ref [])]
+    (set-error-handler! a (fn [_ e]
+                            (.printStackTrace e)))
     (dosync
      (doseq [[idx message] (keep-indexed vector (:messages (get @mail id)))]
        (if (.contains (.getFlags message) Flags$Flag/DELETED)
@@ -139,7 +154,8 @@
      (alter mail update-in [id] assoc :messages @kept)
      (doseq [listener (:listeners (get @mail id))
              msn @expunged]
-       (send-off a (fn [_] (.expunged listener msn)))))))
+       (send-off a (fn [_] (.expunged listener msn)))))
+    (await a)))
 
 (defn get-message [id uid]
   (first (for [message (:messages (get @mail id))
