@@ -53,7 +53,7 @@ public class InMemoryStore
     public static Var SET_SELECTABLE = RT.var("greenmail.store","set-selectable");
     public static Var MAIL_FOLDER = RT.var("greenmail.store","mail-folder");
     public static Var EXPUNGE = RT.var("greenmail.store","expunge");
-    public static Keyword ID= Keyword.intern("id");
+    public static Keyword ID = Keyword.intern("id");
     
     private MailFolder rootMailbox = createRootFolder();
     private static final Flags PERMANENT_FLAGS = new Flags();
