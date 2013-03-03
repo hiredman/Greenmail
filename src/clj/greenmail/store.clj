@@ -7,8 +7,11 @@
            (com.icegreen.greenmail.store MailFolder
                                          SimpleStoredMessage
                                          MessageFlags
-                                         FolderListener)
-           (java.util UUID)))
+                                         FolderListener
+                                         InMemoryStore
+                                         FolderException)
+           (java.util UUID
+                      StringTokenizer)))
 
 (def mail (ref {}))
 
@@ -35,6 +38,7 @@
   (set-selectable [_ v]))
 
 (def hierarchy-delimiter-char ".")
+(def user-namespace "#mail")
 
 (def permament-flags
   (doto (Flags.)
@@ -75,11 +79,11 @@
                  :when (not (.contains (.getFlags message) Flags$Flag/SEEN))]
              1)))
 
+(defn messages-get [id k]
+  (get (:messages (get @mail id)) k))
+
 (defn get-msn [id uid]
-  (first
-   (for [{:keys [^SimpleStoredMessage message msn]} (get (:messages (get @mail id)) {:msn id})
-         :when (= (.getUid message) uid)]
-     msn)))
+  (:msn (first (messages-get id {:uid uid}))))
 
 (defn signal-deletion [id]
   (let [a (agent nil)]
@@ -119,33 +123,25 @@
     uid))
 
 (defn set-flags [id ^Flags flags value? uid silent-listener add-uid?]
-  (let [{:keys [msn ^SimpleStoredMessage message]} (first (get (:messages (get @mail id)) {:uid uid}))]
+  (let [{:keys [msn ^SimpleStoredMessage message]}
+        (first (get (:messages (get @mail id)) {:uid uid}))]
     (if value?
       (.add (.getFlags message) flags)
       (.remove (.getFlags message) flags))
-    (let [a (agent nil)
-          flags (.getFlags message)]
-      (set-error-handler! a agent-print-trace)
-      (dosync
-       (ensure mail)
-       (doseq [^FolderListener listener (:listeners (get @mail id))
-               :when (not= listener silent-listener)]
-         (send-off a (fn [_] (.flagsUpdated listener msn flags (when add-uid? uid))))))
-      (await a))))
+    (let [flags (.getFlags message)]
+      (doseq [^FolderListener listener (:listeners (get @mail id))
+              :when (not= listener silent-listener)]
+        (.flagsUpdated listener msn flags (when add-uid? uid))))))
 
 (defn replace-flags [id ^Flags flags uid silent-listener add-uid?]
-  (let [{:keys [msn ^SimpleStoredMessage message]} (get (:messages (get @mail id)) {:uid uid})]
+  (let [{:keys [msn ^SimpleStoredMessage message]}
+        (get (:messages (get @mail id)) {:uid uid})]
     (.remove (.getFlags message) MessageFlags/ALL_FLAGS)
     (.add (.getFlags message) flags)
-    (let [a (agent nil)
-          flags (.getFlags message)]
-      (set-error-handler! a agent-print-trace)
-      (dosync
-       (ensure mail)
-       (doseq [^FolderListener listener (:listeners (get @mail id))
-               :when (not= listener silent-listener)]
-         (send-off a (fn [_] (.flagsUpdated listener msn flags (when add-uid? uid))))))
-      (await a))))
+    (let [flags (.getFlags message)]
+      (doseq [^FolderListener listener (:listeners (get @mail id))
+              :when (not= listener silent-listener)]
+        (.flagsUpdated listener msn flags (when add-uid? uid))))))
 
 (defn expunge [id]
   (let [a (agent nil)]
@@ -174,6 +170,13 @@
     (append-message to-id
                     (.add nflags (.getFlags omsg))
                     (.getInternalDate omsg))))
+
+(defn -get-child [id child-name]
+  (first (for [child-id (:children (get @mail id))
+               :when (.equalsIgnoreCase
+                      ^String (:name (get @mail child-id))
+                      child-name)]
+           child-id)))
 
 ;; HiMF is a dummy oop shell around a relational + functional
 ;; implementation
@@ -254,12 +257,8 @@
   HasChildren
   (get-children [_]
     (map ->HiMF (:children (get @mail id))))
-  (get-child [folder child-name]
-    (first (for [child-id (:children (get @mail id))
-                 :when (.equalsIgnoreCase
-                        ^String (:name (get @mail child-id))
-                        child-name)]
-             (->HiMF child-id))))
+  (get-child [_ child-name]
+    (->HiMF (-get-child id child-name)))
   (add-child [_ child]
     (dosync
      (alter mail update-in [id :children] conj (:id child))))
@@ -290,3 +289,25 @@
                            :children #{}
                            :root? (boolean root?)}))
     (->HiMF id)))
+
+(defn get-mailbox
+  ([store absolute-name]
+     (let [tokens (StringTokenizer. absolute-name hierarchy-delimiter-char)]
+       (if (or (not (.hasMoreTokens tokens))
+               (not (-> tokens .nextToken (.equalsIgnoreCase user-namespace))))
+         nil
+         (loop [parent-id (:id (.rootMailbox store))]
+           (if (and (not (nil? parent-id))
+                    (.hasMoreTokens tokens))
+             (recur (-get-child parent-id (.nextToken tokens)))
+             parent-id)))))
+  ([store parent name]
+     (-get-child (:id parent) name)))
+
+(defn create-mailbox [parent mailbox-name selectable?]
+  (when (not (= -1 (.indexOf mailbox-name hierarchy-delimiter-char)))
+    (throw (FolderException. "Invalid mailbox name.")))
+  (let [child (mail-folder parent mailbox-name)]
+    (add-child parent child)
+    (set-selectable child selectable?)
+    child))

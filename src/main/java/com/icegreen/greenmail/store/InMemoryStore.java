@@ -53,9 +53,12 @@ public class InMemoryStore
     public static Var SET_SELECTABLE = RT.var("greenmail.store","set-selectable");
     public static Var MAIL_FOLDER = RT.var("greenmail.store","mail-folder");
     public static Var EXPUNGE = RT.var("greenmail.store","expunge");
+    public static Var GET_MAILBOX = RT.var("greenmail.store","get-mailbox");
+    public static Var HIMF = RT.var("greenmail.store","->HiMF");
+    public static Var CREATE_MAILBOX = RT.var("greenmail.store","create-mailbox");
     public static Keyword ID = Keyword.intern("id");
     
-    private MailFolder rootMailbox = createRootFolder();
+    public MailFolder rootMailbox = createRootFolder();
     private static final Flags PERMANENT_FLAGS = new Flags();
 
     static {
@@ -68,37 +71,24 @@ public class InMemoryStore
     }
 
     public MailFolder getMailbox(String absoluteMailboxName) {
-        StringTokenizer tokens = new StringTokenizer(absoluteMailboxName, HIERARCHY_DELIMITER);
-
-        // The first token must be "#mail"
-        if (!tokens.hasMoreTokens() ||
-            !tokens.nextToken().equalsIgnoreCase(USER_NAMESPACE)) {
+        Object r = ((IFn)GET_MAILBOX.deref()).invoke(this,absoluteMailboxName);
+        if (r == null)
             return null;
-        }
-
-        MailFolder parent = rootMailbox;
-        while (parent != null && tokens.hasMoreTokens()) {
-            String childName = tokens.nextToken();
-            parent = getChild(parent, childName);
-        }
-        return parent;
+        return (MailFolder)((IFn)HIMF.deref()).invoke(r);
     }
 
     public MailFolder getMailbox(MailFolder parent, String name) {
-        return getChild(parent, name);
+        Object r = (((IFn)GET_MAILBOX.deref()).invoke(this,parent,name));
+        if (r == null)
+            return null;
+        return (MailFolder)((IFn)HIMF.deref()).invoke(r);
     }
 
     public MailFolder createMailbox(MailFolder parent,
                                     String mailboxName,
                                     boolean selectable)
         throws FolderException {
-        if (mailboxName.indexOf(HIERARCHY_DELIMITER_CHAR) != -1) {
-            throw new FolderException("Invalid mailbox name.");
-        }
-        MailFolder child = createHFolder(parent, mailboxName);
-        addChild(parent, child);
-        setSelectable(child,selectable);
-        return child;
+        return (MailFolder)((IFn)CREATE_MAILBOX.deref()).invoke(parent, mailboxName, selectable);
     }
 
     public void deleteMailbox(MailFolder folder) throws FolderException {
