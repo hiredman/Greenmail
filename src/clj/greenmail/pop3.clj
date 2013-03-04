@@ -8,6 +8,11 @@
                        Flags$Flag)
            (java.io StringReader)))
 
+(def errors (agent []))
+
+(add-watch errors :foo (fn [k a ov nv]
+                         (.printStackTrace (last nv))))
+
 (def commands (atom {}))
 
 (defn quit-execute [conn state cmd]
@@ -17,6 +22,7 @@
     (.println conn "+OK by see you soon")
     (.quit conn)
     (catch FolderException e
+      (send-off errors conj e)
       (.println conn "+OK signing off, but message deletion failed")
       (.quit conn))))
 
@@ -35,6 +41,7 @@
       (.println conn
                 (str "+OK " (count messages) " " (sum-message-sizes messages))))
     (catch Exception e
+      (send-off errors conj e)
       (.println conn (str "-ERR " e)))))
 
 (defn dele-execute [conn state cmd]
@@ -52,6 +59,7 @@
               (.add flags Flags$Flag/DELETED)
               (.println conn "+OK message scheduled for deletion"))))))
     (catch Exception e
+      (send-off errors conj e)
       (.println conn (str "-ERR " e)))))
 
 (defn apop-execute [conn state cmd]
@@ -76,6 +84,7 @@
             (.println "."))
           (-> msg .getFlags (.add Flags$Flag/SEEN)))))
     (catch Exception e
+      (send-off errors conj e)
       (.println conn (str "-ERR " e)))))
 
 (defn uidl-execute [conn state cmd]
@@ -95,6 +104,7 @@
                                 (.getUid message))))
           (.println conn "."))))
     (catch FolderException e
+      (send-off errors conj e)
       (.println conn (str "-ERR " e)))))
 
 (defn register [& {:keys [name validator executor]}]
