@@ -178,6 +178,10 @@
                       child-name)]
            child-id)))
 
+(defn -add-child [id child-id]
+  (dosync
+   (alter mail update-in [id :children] conj child-id)))
+
 ;; HiMF is a dummy oop shell around a relational + functional
 ;; implementation
 
@@ -260,8 +264,7 @@
   (get-child [_ child-name]
     (->HiMF (-get-child id child-name)))
   (add-child [_ child]
-    (dosync
-     (alter mail update-in [id :children] conj (:id child))))
+    (-add-child id (:id child)))
   (remove-child [_ child]
     (dosync
      (alter mail update-in [id :children] disj (:id child))))
@@ -308,6 +311,6 @@
   (when (not (= -1 (.indexOf mailbox-name hierarchy-delimiter-char)))
     (throw (FolderException. "Invalid mailbox name.")))
   (let [child (mail-folder parent mailbox-name)]
-    (add-child parent child)
+    (-add-child (:id parent) (:id child))
     (set-selectable child selectable?)
     child))
